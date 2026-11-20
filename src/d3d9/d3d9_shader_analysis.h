@@ -221,6 +221,10 @@ public:
     return m_flatShadingMask;
   }
 
+  bool ReadsOnlyFixedFunctionInputs() const {
+    return m_readsOnlyFixedFunctionInputs;
+  }
+
   explicit operator bool() const {
     return m_length != 0u;
   }
@@ -264,6 +268,8 @@ private:
   std::array<VkImageViewType, 16u> m_imageViewTypes = {};
 
   uint32_t m_flatShadingMask = 0u;
+
+  bool m_readsOnlyFixedFunctionInputs = true;
 
   D3D9InputSignature m_inputSignature = {};
 

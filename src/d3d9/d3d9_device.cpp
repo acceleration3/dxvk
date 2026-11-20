@@ -2503,6 +2503,8 @@ namespace dxvk {
         case D3DRS_WRAP5:
         case D3DRS_WRAP6:
         case D3DRS_WRAP7:
+          m_texCoordWrapSets &= ~(1u << (State - D3DRS_WRAP0));
+          m_texCoordWrapSets |= (Value & 0xfu) ? 1u << (State - D3DRS_WRAP0) : 0u;
           m_dirty.set(D3D9DeviceDirtyFlag::FFPixelShader);
           break;
 
@@ -4821,7 +4823,7 @@ namespace dxvk {
 
 
   bool D3D9DeviceEx::ShiftsTexCoordWrap() {
-    return !InterpolatesTexCoordWrap() && m_dxvkDevice->features().core.features.geometryShader;
+    return m_dxvkDevice->features().core.features.geometryShader;
   }
 
 
@@ -7591,6 +7593,9 @@ namespace dxvk {
       }
     }
 
+    if (unlikely(m_texCoordWrapSets || m_ffGsWrapBound))
+      BindWrapGeometryShader(PrimitiveType);
+
     if (unlikely(m_dirty.test(D3D9DeviceDirtyFlag::DepthBounds))) {
       m_dirty.clr(D3D9DeviceDirtyFlag::DepthBounds);
 
@@ -7637,9 +7642,6 @@ namespace dxvk {
                     D3D9DeviceDirtyFlag::PushDataFfvs,
                     D3D9DeviceDirtyFlag::PushDataFfps))
       UpdatePushData();
-
-    if (unlikely(m_ffGsWrapsTexCoords || m_ffGsWrapBound))
-      BindWrapGeometryShader(PrimitiveType);
 
     ApplyPrimitiveType(PrimitiveType);
   }
@@ -8574,19 +8576,9 @@ namespace dxvk {
     for (uint32_t i = activeTextureStageCount; i < caps::TextureStageCount; i++)
       dirty |= m_specData.disableTextureStage(i);
 
-    uint32_t texCoordWrap = 0u;
-
-    if (SupportsTexCoordWrap()) {
-      const bool useTexcoordIndex = !UseProgrammableVS();
-
-      for (uint32_t i = 0u; i < activeTextureStageCount; i++) {
-        uint32_t set = useTexcoordIndex
-          ? m_state.textureStages[i][DXVK_TSS_TEXCOORDINDEX] & 0b111u
-          : i;
-
-        texCoordWrap |= (m_state.renderStates[D3DRS_WRAP0 + set] & 0xfu) << (4u * i);
-      }
-    }
+    uint32_t texCoordWrap = SupportsTexCoordWrap()
+      ? TexCoordWrapMask(activeTextureStageCount)
+      : 0u;
 
     dirty |= m_specData.setTexCoordWrap(texCoordWrap);
 
@@ -8626,13 +8618,44 @@ namespace dxvk {
   }
 
 
+  uint32_t D3D9DeviceEx::TexCoordWrapMask(uint32_t CoordCount) {
+    const bool useTexcoordIndex = !UseProgrammableVS();
+
+    uint32_t mask = 0u;
+
+    for (uint32_t i = 0u; i < CoordCount; i++) {
+      uint32_t set = useTexcoordIndex
+        ? m_state.textureStages[i][DXVK_TSS_TEXCOORDINDEX] & 0b111u
+        : i;
+
+      mask |= (m_state.renderStates[D3DRS_WRAP0 + set] & 0xfu) << (4u * i);
+    }
+
+    return mask;
+  }
+
+
   void D3D9DeviceEx::BindWrapGeometryShader(D3DPRIMITIVETYPE PrimType) {
     const bool triangles = PrimType == D3DPT_TRIANGLELIST
                         || PrimType == D3DPT_TRIANGLESTRIP
                         || PrimType == D3DPT_TRIANGLEFAN;
 
-    const bool wanted = m_ffGsWrapsTexCoords && triangles
-                     && !UseProgrammableVS() && !UseProgrammablePS();
+    bool wanted = false;
+
+    if (triangles && ShiftsTexCoordWrap()) {
+      if (UseProgrammablePS()) {
+        uint32_t texCoordWrap = GetCommonShader(m_state.pixelShader)->ReadsOnlyFixedFunctionInputs()
+          ? TexCoordWrapMask(caps::TextureStageCount)
+          : 0u;
+
+        if (texCoordWrap && m_specData.setTexCoordWrap(texCoordWrap))
+          m_dirty.set(D3D9DeviceDirtyFlag::SpecializationEntries);
+
+        wanted = texCoordWrap != 0u;
+      } else {
+        wanted = m_ffGsWrapsTexCoords;
+      }
+    }
 
     if (wanted == m_ffGsWrapBound)
       return;
@@ -8913,6 +8936,7 @@ namespace dxvk {
     rs[D3DRS_WRAP5]                      = 0;
     rs[D3DRS_WRAP6]                      = 0;
     rs[D3DRS_WRAP7]                      = 0;
+    m_texCoordWrapSets                   = 0u;
     rs[D3DRS_CLIPPING]                   = TRUE;
     rs[D3DRS_PATCHEDGESTYLE]             = D3DPATCHEDGE_DISCRETE;
     rs[D3DRS_DEBUGMONITORTOKEN]          = D3DDMT_ENABLE;

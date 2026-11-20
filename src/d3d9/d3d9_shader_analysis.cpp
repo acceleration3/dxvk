@@ -309,6 +309,12 @@ namespace dxvk {
       return true;
     }
 
+    if (registerType == RegisterType::eInput
+     && GetShaderInfo().getType() == ShaderType::ePixel
+     && GetShaderInfo().getVersion().first == 3u
+     && !FindLocationInFixedFunctionIO(Semantic { dcl.getSemanticUsage(), dcl.getSemanticIndex() }))
+      m_readsOnlyFixedFunctionInputs = false;
+
     if (GetShaderInfo().getType() == ShaderType::ePixel
      && GetShaderInfo().getVersion().first == 3u
      && dcl.getSemanticUsage() == SemanticUsage::eColor

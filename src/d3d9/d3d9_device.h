@@ -810,6 +810,8 @@ namespace dxvk {
 
     bool ShiftsTexCoordWrap();
 
+    uint32_t TexCoordWrapMask(uint32_t CoordCount);
+
     void BindWrapGeometryShader(D3DPRIMITIVETYPE PrimType);
 
     bool SupportsVCacheQuery() const;
@@ -1639,6 +1641,7 @@ namespace dxvk {
     bool                            m_ffPsWrapsTexCoords = false;
     bool                            m_ffGsWrapsTexCoords = false;
     bool                            m_ffGsWrapBound      = false;
+    uint8_t                         m_texCoordWrapSets   = 0u;
     bool                            m_ffZTest          = false;
 
     // the enablement of below features is tracked independently
