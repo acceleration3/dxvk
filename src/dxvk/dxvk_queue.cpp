@@ -174,18 +174,26 @@ namespace dxvk {
       // On success, pass it on to the queue thread
       { std::unique_lock<dxvk::mutex> lock(m_mutex);
 
-        bool doForward = (status == VK_SUCCESS) ||
-          (entry.present.presenter && status != VK_ERROR_DEVICE_LOST);
+        bool deviceLost = status == VK_ERROR_DEVICE_LOST;
 
-        if (doForward) {
-          m_finishQueue.push(std::move(entry));
-        } else {
+        bool doForward = (status == VK_SUCCESS) ||
+          (entry.present.presenter && !deviceLost);
+
+        if (!doForward) {
           Logger::err(str::format("DxvkSubmissionQueue: Command submission failed: ", status));
           m_lastError = status;
 
           if (status != VK_ERROR_DEVICE_LOST)
             m_device->waitForIdle();
         }
+
+        // A command list the device lost is retired all the same: the
+        // finish thread skips its wait, since the device is lost, and
+        // releases what it used and wakes whoever waits on it. Dropped
+        // here, its resources stayed in use for good, and a Map or a
+        // resource wait on any of them never returned.
+        if (doForward || (deviceLost && entry.submit.cmdList != nullptr))
+          m_finishQueue.push(std::move(entry));
 
         m_submitQueue.pop();
         m_submitCond.notify_all();
