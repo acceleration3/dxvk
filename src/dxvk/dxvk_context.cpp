@@ -1325,7 +1325,7 @@ namespace dxvk {
     const Rc<DxvkBuffer>&           buffer,
           Rc<DxvkResourceAllocation>&& slice) {
     if (unlikely(!slice)) {
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return;
     }
 
@@ -1582,7 +1582,7 @@ namespace dxvk {
     auto storage = image->allocateStorageWithUsage(usage, 0u);
 
     if (unlikely(!storage)) {
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return false;
     }
 
@@ -2495,7 +2495,7 @@ namespace dxvk {
 
           m_cmd->track(std::move(oldStorage));
         } else {
-          m_device->markDeviceLost();
+          m_device->markOutOfMemory();
         }
       }
 
@@ -9184,7 +9184,7 @@ namespace dxvk {
       return m_device->createBuffer(createInfo, memoryType);
     } catch (const DxvkOutOfMemoryError& e) {
       Logger::err(e.message());
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return nullptr;
     }
   }
@@ -9253,7 +9253,7 @@ namespace dxvk {
       auto storage = m_specBuffer->allocateStorage();
 
       if (unlikely(!storage)) {
-        m_device->markDeviceLost();
+        m_device->markOutOfMemory();
         return DxvkResourceBufferInfo();
       }
 

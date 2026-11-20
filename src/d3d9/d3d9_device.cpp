@@ -5395,7 +5395,7 @@ namespace dxvk {
       D3D9BufferSlice slice = AllocStagingBuffer(dirtySize);
 
       if (unlikely(!slice.mapPtr)) {
-        m_dxvkDevice->markDeviceLost();
+        m_dxvkDevice->markOutOfMemory();
         return;
       }
 
@@ -5452,7 +5452,7 @@ namespace dxvk {
       D3D9BufferSlice slice = AllocStagingBuffer(pSrcTexture->GetSubresourceSize(SrcSubresource));
 
       if (unlikely(!slice.mapPtr)) {
-        m_dxvkDevice->markDeviceLost();
+        m_dxvkDevice->markOutOfMemory();
         return;
       }
 
@@ -5660,7 +5660,7 @@ namespace dxvk {
     D3D9BufferSlice slice = AllocStagingBuffer(range.max - range.min);
 
     if (unlikely(!slice.mapPtr)) {
-      m_dxvkDevice->markDeviceLost();
+      m_dxvkDevice->markOutOfMemory();
       return D3DERR_OUTOFVIDEOMEMORY;
     }
 

@@ -3088,7 +3088,7 @@ namespace dxvk {
     DxvkBufferSlice slice = AllocStagingBuffer(bufferSize);
 
     if (unlikely(!slice.defined())) {
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return;
     }
 
@@ -5753,7 +5753,7 @@ namespace dxvk {
       DxvkBufferSlice stagingSlice = AllocStagingBuffer(Length);
 
       if (unlikely(!stagingSlice.defined())) {
-        m_device->markDeviceLost();
+        m_device->markOutOfMemory();
         return;
       }
 
@@ -5823,7 +5823,7 @@ namespace dxvk {
     auto stagingSlice = AllocStagingBuffer(util::computeImageDataSize(packedFormat, extent));
 
     if (unlikely(!stagingSlice.defined())) {
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return;
     }
 

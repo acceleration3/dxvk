@@ -97,7 +97,7 @@ namespace dxvk {
     auto srcSlice = AllocStagingBuffer(icbSlice.length());
 
     if (unlikely(!srcSlice.defined() && icbSlice.length())) {
-      m_device->markDeviceLost();
+      m_device->markOutOfMemory();
       return;
     }
 
@@ -127,7 +127,7 @@ namespace dxvk {
       auto stagingSlice = AllocStagingBuffer(buffer->info().size);
 
       if (unlikely(!stagingSlice.defined() && buffer->info().size)) {
-        m_device->markDeviceLost();
+        m_device->markOutOfMemory();
         return;
       }
 
@@ -192,7 +192,7 @@ namespace dxvk {
         stagingSlice = AllocStagingBuffer(dataSize);
 
         if (unlikely(!stagingSlice.defined() && dataSize)) {
-          m_device->markDeviceLost();
+          m_device->markOutOfMemory();
           return;
         }
       }

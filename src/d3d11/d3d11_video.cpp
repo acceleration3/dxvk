@@ -1529,7 +1529,7 @@ namespace dxvk {
       Rc<DxvkResourceAllocation> uboSlice = m_ubo->allocateStorage();
 
       if (unlikely(!uboSlice)) {
-        m_device->markDeviceLost();
+        m_device->markOutOfMemory();
         return;
       }
 

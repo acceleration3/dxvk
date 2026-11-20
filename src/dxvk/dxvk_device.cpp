@@ -1,3 +1,4 @@
+#include <atomic>
 #include "dxvk_device.h"
 #include "dxvk_instance.h"
 #include "dxvk_shader_cache.h"
@@ -897,4 +898,19 @@ namespace dxvk {
     Logger::info(str::format("Binding model: ", descriptorModel));
   }
 
+}
+
+
+namespace dxvk {
+
+  std::atomic<uint32_t> g_outOfMemoryEvents = { 0u };
+
+  void DxvkDevice::markOutOfMemory() {
+    g_outOfMemoryEvents.fetch_add(1u, std::memory_order_relaxed);
+  }
+
+}
+
+extern "C" __attribute__((visibility("default"))) uint32_t dxvk_take_out_of_memory() {
+  return dxvk::g_outOfMemoryEvents.exchange(0u, std::memory_order_relaxed);
 }

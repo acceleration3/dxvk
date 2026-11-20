@@ -268,6 +268,15 @@ namespace dxvk {
     }
 
     /**
+     * \brief Records that an allocation was refused
+     *
+     * The operation that needed it is skipped. The device stays
+     * usable for everything else sharing it; the embedder reads
+     * the count through dxvk_take_out_of_memory.
+     */
+    void markOutOfMemory();
+
+    /**
      * \brief Queries mapped image subresource layout
      *
      * Assumes that the image tiling is linear even

@@ -34,7 +34,7 @@ namespace dxvk {
         m_cpuSlice = CreateBuffer();
       } catch (const DxvkOutOfMemoryError& e) {
         Logger::err(e.message());
-        m_device->GetDXVKDevice()->markDeviceLost();
+        m_device->GetDXVKDevice()->markOutOfMemory();
         return nullptr;
       }
     }
@@ -45,7 +45,7 @@ namespace dxvk {
       auto storage = m_cpuBuffer->allocateStorage();
 
       if (unlikely(!storage)) {
-        m_device->GetDXVKDevice()->markDeviceLost();
+        m_device->GetDXVKDevice()->markOutOfMemory();
         return nullptr;
       }
 
