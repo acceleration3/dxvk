@@ -114,6 +114,7 @@ namespace dxvk {
     SupportsResourceIndexing    = 20u,
     /// Whether descriptor heap is used as the binding model.
     SupportsDescriptorHeap      = 21u,
+    SupportsRasterizationStreamSelect = 22u,
   };
 
   using DxvkShaderSpirvFlags = Flags<DxvkShaderSpirvFlag>;

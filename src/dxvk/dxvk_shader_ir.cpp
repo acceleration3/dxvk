@@ -6,6 +6,8 @@
 
 #include "dxvk_shader_ir.h"
 
+#include "../util/av_stream_swap.h"
+
 namespace dxvk {
 
   size_t DxvkIrShaderCreateInfo::hash() const {
@@ -2144,7 +2146,25 @@ namespace dxvk {
     dxbc_spv::spirv::SpirvBuilder spirvBuilder(irBuilder, mapping, options);
     spirvBuilder.buildSpirvBinary();
 
-    return SpirvCodeBuffer(spirvBuilder.getSpirvBinary());
+    auto binary = spirvBuilder.getSpirvBinary();
+
+    if (m_metadata.stage == VK_SHADER_STAGE_GEOMETRY_BIT && m_metadata.rasterizedStream > 0
+     && !m_info.options.spirv.test(DxvkShaderSpirvFlag::SupportsRasterizationStreamSelect)) {
+      uint32_t* swapped = nullptr;
+      size_t swappedCount = 0u;
+
+      if (!av_ss_rasterize_stream_as_zero(binary.data(), binary.size(),
+          uint32_t(m_metadata.rasterizedStream), &swapped, &swappedCount)) {
+        SpirvCodeBuffer code(uint32_t(swappedCount), swapped);
+        free(swapped);
+        return code;
+      }
+
+      Logger::warn(str::format(debugName(), ": stream ", m_metadata.rasterizedStream,
+        " cannot be rasterized as stream 0, stream 0 is rasterized instead"));
+    }
+
+    return SpirvCodeBuffer(std::move(binary));
   }
 
 
