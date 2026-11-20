@@ -1,3 +1,6 @@
+#include <atomic>
+#include <thread>
+
 #include "d3d9_interop.h"
 #include "d3d9_interface.h"
 #include "d3d9_common_texture.h"
@@ -251,6 +254,148 @@ namespace dxvk {
   
   void STDMETHODCALLTYPE D3D9VkInteropDevice::UnlockDevice() {
     m_lock = D3D9DeviceLock();
+  }
+
+  static D3D9CommonBuffer* GetCommonBuffer(IDirect3DResource9* pResource) {
+    if (unlikely(!pResource))
+      return nullptr;
+
+    switch (pResource->GetType()) {
+      case D3DRTYPE_VERTEXBUFFER: return static_cast<D3D9VertexBuffer*>(pResource)->GetCommonBuffer();
+      case D3DRTYPE_INDEXBUFFER:  return static_cast<D3D9IndexBuffer*> (pResource)->GetCommonBuffer();
+      default:                    return nullptr;
+    }
+  }
+
+  class D3D9SubmissionSignal final : public sync::Signal {
+
+  public:
+
+    D3D9SubmissionSignal(void (*pCallback)(void*, uint64_t), void* pContext)
+    : m_callback(pCallback), m_context(pContext) { }
+
+    uint64_t value() const {
+      return m_value.load();
+    }
+
+    void signal(uint64_t value) {
+      m_value.store(value);
+      m_callback(m_context, value);
+    }
+
+    void wait(uint64_t value) {
+      while (m_value.load() < value)
+        std::this_thread::yield();
+    }
+
+  private:
+
+    void (*m_callback)(void*, uint64_t);
+    void*                 m_context;
+    std::atomic<uint64_t> m_value = { 0u };
+
+  };
+
+  HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::BufferStorageBindable(
+          IDirect3DResource9*  pResource) {
+    D3D9DeviceLock lock = m_device->LockDevice();
+
+    D3D9CommonBuffer* buffer = GetCommonBuffer(pResource);
+
+    if (unlikely(!buffer || buffer->GetMapMode() != D3D9_COMMON_BUFFER_MAP_MODE_DIRECT))
+      return D3DERR_INVALIDCALL;
+
+    return D3D_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::UnbindBufferStorage(
+          IDirect3DResource9*  pResource) {
+    D3D9DeviceLock lock = m_device->LockDevice();
+
+    D3D9CommonBuffer* buffer = GetCommonBuffer(pResource);
+
+    if (unlikely(!buffer || buffer->GetMapMode() != D3D9_COMMON_BUFFER_MAP_MODE_DIRECT))
+      return D3DERR_INVALIDCALL;
+
+    m_device->EmitCs([
+      cBuffer     = buffer->GetBuffer<D3D9_COMMON_BUFFER_TYPE_MAPPING>(),
+      cAllocation = buffer->DiscardMapSlice()
+    ] (DxvkContext* ctx) mutable {
+      ctx->invalidateBuffer(cBuffer, std::move(cAllocation));
+    });
+
+    buffer->SetNeedsReadback(false);
+    return D3D_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::MarkSubmission(
+          void (*pCallback)(void*, uint64_t),
+          void*                pContext,
+          uint64_t             Value) {
+    if (unlikely(!pCallback))
+      return D3DERR_INVALIDCALL;
+
+    {
+      D3D9DeviceLock lock = m_device->LockDevice();
+
+      m_device->EmitCs([
+        cSignal = Rc<sync::Signal>(new D3D9SubmissionSignal(pCallback, pContext)),
+        cValue  = Value
+      ] (DxvkContext* ctx) {
+        ctx->signal(cSignal, cValue);
+      });
+    }
+
+    m_device->Flush();
+    return D3D_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::BindBufferStorage(
+          IDirect3DResource9*  pResource,
+          VkBuffer             Storage,
+          VkDeviceSize         Offset,
+          VkDeviceSize         Length,
+          void*                pMapPtr) {
+    D3D9DeviceLock lock = m_device->LockDevice();
+
+    if (unlikely(!pResource || !Storage || !pMapPtr))
+      return D3DERR_INVALIDCALL;
+
+    D3D9CommonBuffer* buffer = GetCommonBuffer(pResource);
+
+    if (unlikely(!buffer))
+      return D3DERR_INVALIDCALL;
+
+    if (unlikely(buffer->GetMapMode() != D3D9_COMMON_BUFFER_MAP_MODE_DIRECT))
+      return D3DERR_INVALIDCALL;
+
+    if (unlikely(Length < buffer->Desc()->Size))
+      return D3DERR_INVALIDCALL;
+
+    DxvkBufferImportInfo importInfo;
+    importInfo.buffer = Storage;
+    importInfo.offset = Offset;
+    importInfo.mapPtr = pMapPtr;
+
+    m_device->EmitCs([
+      cBuffer     = buffer->GetBuffer<D3D9_COMMON_BUFFER_TYPE_MAPPING>(),
+      cAllocation = buffer->ImportMapSlice(importInfo)
+    ] (DxvkContext* ctx) mutable {
+      ctx->invalidateBuffer(cBuffer, std::move(cAllocation));
+    });
+
+    buffer->SetNeedsReadback(false);
+    return D3D_OK;
+  }
+
+  void STDMETHODCALLTYPE D3D9VkInteropDevice::FlushCommands() {
+    m_device->Flush();
+  }
+
+  void STDMETHODCALLTYPE D3D9VkInteropDevice::WaitForIdle() {
+    m_device->Flush();
+    m_device->SynchronizeCsThread(DxvkCsThread::SynchronizeAll);
+    m_device->GetDXVKDevice()->waitForIdle();
   }
 
   static Rc<DxvkPagedResource> GetDxvkResource(IDirect3DResource9 *pResource) {

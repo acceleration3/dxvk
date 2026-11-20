@@ -254,6 +254,82 @@ ID3D9VkInteropDevice : public IUnknown {
 };
 
 /**
+ * \brief D3D9 device interface for Vulkan interop - extended
+ *
+ * Lets an embedder point a dynamic buffer at memory it imported itself,
+ * recorded in order with the device's other commands, as a discard would
+ * rename it: commands recorded before read the old storage, those after the
+ * new.
+ */
+MIDL_INTERFACE("9c3a6f27-5b81-4e0d-a7d2-1f48c6b0e395")
+ID3D9VkInteropDevice1 : public ID3D9VkInteropDevice {
+  /**
+   * \brief Points a vertex or index buffer at imported storage
+   *
+   * The buffer must be directly mapped: DEFAULT pool and DYNAMIC usage.
+   * The embedder must not lock a buffer it bound storage to.
+   * \param [in] pResource The vertex or index buffer
+   * \param [in] Storage The imported buffer
+   * \param [in] Offset Offset of the buffer's bytes in Storage
+   * \param [in] Length Bytes available from Offset
+   * \param [in] pMapPtr Host pointer to the bytes at Offset
+   * \returns D3DERR_INVALIDCALL if the buffer is not directly mapped
+   */
+  virtual HRESULT STDMETHODCALLTYPE BindBufferStorage(
+          IDirect3DResource9*  pResource,
+          VkBuffer             Storage,
+          VkDeviceSize         Offset,
+          VkDeviceSize         Length,
+          void*                pMapPtr) = 0;
+
+  /**
+   * \brief Submits the recorded commands without waiting for the CS thread
+   *
+   * Lets an embedder that marks a batch with an event query have the batch
+   * reach the GPU, as ID3D11DeviceContext::Flush does for a D3D11 fence.
+   */
+  virtual void STDMETHODCALLTYPE FlushCommands() = 0;
+
+  /**
+   * \brief Whether a buffer can be pointed at imported storage
+   *
+   * \returns D3D_OK if the vertex or index buffer is directly mapped
+   */
+  virtual HRESULT STDMETHODCALLTYPE BufferStorageBindable(
+          IDirect3DResource9*  pResource) = 0;
+
+  /**
+   * \brief Gives a buffer storage of its own again
+   *
+   * Recorded in order like BindBufferStorage, whatever the lock flags and
+   * the device's discard settings: the buffer takes a fresh allocation and
+   * its contents are undefined until the embedder writes them.
+   */
+  virtual HRESULT STDMETHODCALLTYPE UnbindBufferStorage(
+          IDirect3DResource9*  pResource) = 0;
+
+  /**
+   * \brief Calls back once the commands recorded so far have completed
+   *
+   * Submits what was recorded, as FlushCommands does, and calls
+   * pCallback(pContext, Value) from a DXVK thread when the GPU has finished
+   * the submission that holds this point.
+   */
+  virtual HRESULT STDMETHODCALLTYPE MarkSubmission(
+          void (*pCallback)(void*, uint64_t),
+          void*                pContext,
+          uint64_t             Value) = 0;
+
+  /**
+   * \brief Waits until every command of the device has run
+   *
+   * Drains the CS thread and DXVK's submission and finish threads, and then
+   * the device.
+   */
+  virtual void STDMETHODCALLTYPE WaitForIdle() = 0;
+};
+
+/**
  * \brief D3D9 current output metadata
  */
 struct D3D9VkExtOutputMetadata {
@@ -299,6 +375,7 @@ __CRT_UUID_DECL(ID3D9VkInteropInterface,   0x3461a81b,0xce41,0x485b,0xb6,0xb5,0x
 __CRT_UUID_DECL(ID3D9VkInteropInterface1,  0xd6589ed4,0x7a37,0x4096,0xba,0xc2,0x22,0x3b,0x25,0xae,0x31,0xd2);
 __CRT_UUID_DECL(ID3D9VkInteropTexture,     0xd56344f5,0x8d35,0x46fd,0x80,0x6d,0x94,0xc3,0x51,0xb4,0x72,0xc1);
 __CRT_UUID_DECL(ID3D9VkInteropDevice,      0x2eaa4b89,0x0107,0x4bdb,0x87,0xf7,0x0f,0x54,0x1c,0x49,0x3c,0xe0);
+__CRT_UUID_DECL(ID3D9VkInteropDevice1,     0x9c3a6f27,0x5b81,0x4e0d,0xa7,0xd2,0x1f,0x48,0xc6,0xb0,0xe3,0x95);
 __CRT_UUID_DECL(ID3D9VkExtSwapchain,       0x13776e93,0x4aa9,0x430a,0xa4,0xec,0xfe,0x9e,0x28,0x11,0x81,0xd5);
 __CRT_UUID_DECL(ID3D9VkExtInterface,       0x65b55086,0xe3e3,0x4c3e,0xb3,0xa0,0x86,0x81,0x5c,0xce,0x2c,0x4c);
 #endif
