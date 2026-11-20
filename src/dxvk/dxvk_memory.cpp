@@ -1400,6 +1400,16 @@ namespace dxvk {
       return DxvkDeviceMemory();
 
     const bool gated = isGated(type);
+    const bool hostGated = isHostGated(type);
+
+    if (hostGated && !m_vramAccount.takeHost(size)) {
+      freeEmptyChunksInHeap(*type.heap, VkDeviceSize(-1), high_resolution_clock::time_point());
+
+      if (!m_vramAccount.takeHost(size)) {
+        Logger::warn(str::format("System memory allocation of ", size >> 10u, " KiB refused: over the VM's host memory budget"));
+        return DxvkDeviceMemory();
+      }
+    }
 
     if (gated && !m_vramAccount.take(size)) {
       // Empty chunks still hold part of the cap; give them back and ask again.
@@ -1407,6 +1417,7 @@ namespace dxvk {
 
       if (!m_vramAccount.take(size)) {
         Logger::warn(str::format("Device-local allocation of ", size >> 10u, " KiB refused: over the guest's video memory cap"));
+
         return DxvkDeviceMemory();
       }
     }
@@ -1456,6 +1467,9 @@ namespace dxvk {
       if (vk->vkAllocateMemory(vk->device(), &memoryInfo, nullptr, &result.memory)) {
         if (gated)
           m_vramAccount.give(size);
+
+        if (hostGated)
+          m_vramAccount.giveHost(size);
 
         return DxvkDeviceMemory();
       }
@@ -1693,6 +1707,9 @@ namespace dxvk {
     if (isGated(type))
       m_vramAccount.give(memory.size);
 
+    if (isHostGated(type))
+      m_vramAccount.giveHost(memory.size);
+
     type.stats.memoryAllocated -= memory.size;
   }
 
@@ -1726,6 +1743,9 @@ namespace dxvk {
 
           if (isGated(*allocation->m_type))
             m_vramAccount.give(allocation->m_size);
+
+          if (isHostGated(*allocation->m_type))
+            m_vramAccount.giveHost(allocation->m_size);
         } else {
           DxvkMemoryPool& pool = allocation->m_mapPtr
             ? allocation->m_type->mappedPool
