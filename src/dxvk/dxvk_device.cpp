@@ -738,7 +738,11 @@ namespace dxvk {
     m_shaderOptions.minStorageBufferAlignment =
       m_properties.core.properties.limits.minStorageBufferOffsetAlignment;
 
-    if (m_features.vk12.shaderFloat16)
+    // Min-precision types become 16-bit ones in shader inputs and outputs too,
+    // which takes storageInputOutput16: a device with 16-bit arithmetic but no
+    // 16-bit I/O (Intel gen 9) keeps 32-bit types, or its shaders use a feature
+    // it does not have (Direct2D's glyph shader draws noise on a UHD 630).
+    if (m_features.vk12.shaderFloat16 && m_features.vk11.storageInputOutput16)
       m_shaderOptions.flags.set(DxvkShaderCompileFlag::Supports16BitArithmetic);
 
     if (m_features.vk11.storagePushConstant16 && m_features.vk12.storagePushConstant8)
