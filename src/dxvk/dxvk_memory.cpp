@@ -739,7 +739,8 @@ namespace dxvk {
 
 
   DxvkMemoryAllocator::DxvkMemoryAllocator(DxvkDevice* device)
-  : m_device(device), m_sharingModeInfo(m_device->getSharingMode()) {
+  : m_device(device), m_sharingModeInfo(m_device->getSharingMode()),
+    m_vramAccount(m_device->adapter()->info().deviceUuid) {
     VkPhysicalDeviceMemoryProperties memInfo = m_device->adapter()->memoryProperties();
 
     m_memTypeCount = memInfo.memoryTypeCount;
@@ -751,7 +752,7 @@ namespace dxvk {
       heap.index = i;
       heap.memoryBudget = memInfo.memoryHeaps[i].size;
       heap.properties = memInfo.memoryHeaps[i];
-      heap.enforceBudget = !m_device->isUnifiedMemoryArchitecture()
+      heap.enforceBudget = !m_vramAccount.active() && !m_device->isUnifiedMemoryArchitecture()
         && m_device->properties().core.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
     }
 
@@ -986,7 +987,7 @@ namespace dxvk {
             return allocation;
 
           if (!allocation && (allocationInfo.properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-          && !allocationInfo.mode.test(DxvkAllocationMode::NoFallback)) {
+          && allowsFallback(allocationInfo)) {
             DxvkAllocationInfo fallbackInfo = allocationInfo;
             fallbackInfo.properties &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1062,7 +1063,7 @@ namespace dxvk {
         allocation = allocateMemory(requirements.memoryRequirements, allocationInfo);
 
       if (!allocation && (allocationInfo.properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-       && !allocationInfo.mode.test(DxvkAllocationMode::NoFallback)) {
+       && allowsFallback(allocationInfo)) {
         DxvkAllocationInfo fallbackInfo = allocationInfo;
         fallbackInfo.properties &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1168,7 +1169,7 @@ namespace dxvk {
         // Only retry with a dedicated sysmem allocation if a dedicated allocation
         // is required. Otherwise, we should try to suballocate in device memory.
         if (!allocation && dedicatedRequirements.requiresDedicatedAllocation
-         && !allocationInfo.mode.test(DxvkAllocationMode::NoFallback)
+         && allowsFallback(allocationInfo)
          && (allocationInfo.properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
           DxvkAllocationInfo fallbackInfo = allocationInfo;
           fallbackInfo.properties &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -1190,7 +1191,7 @@ namespace dxvk {
         allocation = allocateMemory(requirements.memoryRequirements, allocationInfo);
 
         if (!allocation && (allocationInfo.properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-         && !allocationInfo.mode.test(DxvkAllocationMode::NoFallback)) {
+         && allowsFallback(allocationInfo)) {
           DxvkAllocationInfo fallbackInfo = allocationInfo;
           fallbackInfo.properties &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1362,6 +1363,18 @@ namespace dxvk {
       return DxvkDeviceMemory();
     }
 
+    const bool gated = isGated(type);
+
+    if (gated && !m_vramAccount.take(size)) {
+      // Empty chunks still hold part of the cap; give them back and ask again.
+      freeEmptyChunksInHeap(*type.heap, VkDeviceSize(-1), high_resolution_clock::time_point());
+
+      if (!m_vramAccount.take(size)) {
+        Logger::warn(str::format("Device-local allocation of ", size >> 10u, " KiB refused: over the guest's video memory cap"));
+        return DxvkDeviceMemory();
+      }
+    }
+
     VkMemoryAllocateInfo memoryInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, next };
     memoryInfo.allocationSize = size;
     memoryInfo.memoryTypeIndex = type.index;
@@ -1404,8 +1417,12 @@ namespace dxvk {
     if (vk->vkAllocateMemory(vk->device(), &memoryInfo, nullptr, &result.memory)) {
       freeEmptyChunksInHeap(*type.heap, VkDeviceSize(-1), high_resolution_clock::time_point());
 
-      if (vk->vkAllocateMemory(vk->device(), &memoryInfo, nullptr, &result.memory))
+      if (vk->vkAllocateMemory(vk->device(), &memoryInfo, nullptr, &result.memory)) {
+        if (gated)
+          m_vramAccount.give(size);
+
         return DxvkDeviceMemory();
+      }
     }
 
     // Technically redundant if EXT_memory_priority is also supported, but this shouldn't hurt
@@ -1637,6 +1654,9 @@ namespace dxvk {
     vk->vkDestroyBuffer(vk->device(), memory.buffer, nullptr);
     vk->vkFreeMemory(vk->device(), memory.memory, nullptr);
 
+    if (isGated(type))
+      m_vramAccount.give(memory.size);
+
     type.stats.memoryAllocated -= memory.size;
   }
 
@@ -1667,6 +1687,9 @@ namespace dxvk {
         if (unlikely(allocation->m_flags.test(DxvkAllocationFlag::OwnsMemory))) {
           // We free the actual allocation later, just update stats here.
           allocation->m_type->stats.memoryAllocated -= allocation->m_size;
+
+          if (isGated(*allocation->m_type))
+            m_vramAccount.give(allocation->m_size);
         } else {
           DxvkMemoryPool& pool = allocation->m_mapPtr
             ? allocation->m_type->mappedPool

@@ -8,6 +8,7 @@
 #include "dxvk_allocator.h"
 #include "dxvk_descriptor.h"
 #include "dxvk_hash.h"
+#include "dxvk_vram_gate.h"
 
 #include "../util/util_time.h"
 
@@ -1369,6 +1370,7 @@ namespace dxvk {
     DxvkDevice* m_device;
 
     DxvkSharingModeInfo       m_sharingModeInfo;
+    DxvkVramAccount           m_vramAccount;
 
     dxvk::mutex               m_mutex;
 
@@ -1399,6 +1401,15 @@ namespace dxvk {
 
     alignas(CACHE_LINE_SIZE)
     DxvkRelocationList        m_relocations;
+
+    bool isGated(const DxvkMemoryType& type) const {
+      return m_vramAccount.active()
+          && (type.properties.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+
+    bool allowsFallback(const DxvkAllocationInfo& info) const {
+      return !m_vramAccount.active() && !info.mode.test(DxvkAllocationMode::NoFallback);
+    }
 
     DxvkDeviceMemory allocateDeviceMemory(
             DxvkMemoryType&       type,
