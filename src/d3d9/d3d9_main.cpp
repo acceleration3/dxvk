@@ -1,4 +1,5 @@
 #include "../dxvk/dxvk_instance.h"
+#include "../dxvk/dxvk_vram_gate.h"
 
 #include "d3d9_interface.h"
 #include "d3d9_shader_validator.h"
@@ -27,6 +28,10 @@ namespace dxvk {
 
 
 extern "C" {
+
+  DLLEXPORT void dxvk_proton_set_vram_gate(const dxvk::DxvkVramGate* gate) {
+    dxvk::g_vramGate = gate;
+  }
 
   DLLEXPORT IDirect3D9* __stdcall Direct3DCreate9(UINT nSDKVersion) {
     IDirect3D9Ex* pDirect3D = nullptr;
