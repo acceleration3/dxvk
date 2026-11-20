@@ -269,6 +269,17 @@ namespace dxvk {
     }
 
     /**
+     * \brief Storage over a buffer an embedder imported
+     *
+     * As the importing constructor makes its storage, but for a buffer that
+     * already exists, to be assigned with invalidateBuffer. Storage with a
+     * host mapping is never relocated (canRelocate).
+     * \param [in] importInfo The imported buffer, offset and mapping
+     * \returns The new backing resource
+     */
+    Rc<DxvkResourceAllocation> importStorage(const DxvkBufferImportInfo& importInfo);
+
+    /**
      * \brief Allocates new buffer slice with cache
      *
      * Uses the given cache to service small allocations without

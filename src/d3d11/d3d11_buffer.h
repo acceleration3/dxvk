@@ -166,6 +166,17 @@ namespace dxvk {
       return allocation;
     }
 
+    /**
+     * \brief Storage an embedder imported, for the buffer to be renamed to
+     *
+     * The rename itself is the context's to record, as for DiscardSlice.
+     */
+    Rc<DxvkResourceAllocation> ImportSlice(const DxvkBufferImportInfo& importInfo) {
+      auto allocation = m_buffer->importStorage(importInfo);
+      m_mapPtr = allocation->mapPtr();
+      return allocation;
+    }
+
     void* GetMapPtr() const {
       return m_mapPtr;
     }

@@ -8,7 +8,7 @@ namespace dxvk {
   class D3D11ImmediateContext;
 
   template<typename ContextType>
-  class D3D11DeviceContextExt : public ID3D11VkExtContext1 {
+  class D3D11DeviceContextExt : public ID3D11VkExtContext2 {
     
   public:
     
@@ -70,6 +70,13 @@ namespace dxvk {
             uint32_t                NumReadResources,
             void* const*            pWriteResources,
             uint32_t                NumWriteResources);
+
+    HRESULT STDMETHODCALLTYPE BindBufferStorage(
+            ID3D11Buffer*           pBuffer,
+            VkBuffer                Storage,
+            VkDeviceSize            Offset,
+            VkDeviceSize            Length,
+            void*                   pMapPtr);
 
   private:
     
