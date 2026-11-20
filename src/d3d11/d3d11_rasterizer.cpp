@@ -68,6 +68,16 @@ namespace dxvk {
     // Target-independent rasterization is emulated at one sample, the
     // coverage computed in the pixel shader of every pixel the triangle
     // touches (D3D11TirShaders).
+    m_emulatesLineCoverage = desc.AntialiasedLineEnable && !desc.MultisampleEnable
+      && device->GetLineCoverage().IsSupported();
+
+    m_lineCoverageState = m_state;
+    m_lineCoverageState.setPolygonMode(VK_POLYGON_MODE_FILL);
+    m_lineCoverageState.setCullMode(VK_CULL_MODE_NONE);
+    m_lineCoverageState.setFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    m_lineCoverageState.setConservativeMode(VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
+    m_lineCoverageState.setLineMode(VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT);
+
     m_tirState = m_state;
     m_tirState.setSampleCount(0u);
     m_tirState.setConservativeMode(features.extConservativeRasterization

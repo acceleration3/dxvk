@@ -53,6 +53,14 @@ namespace dxvk {
       return m_tirState;
     }
 
+    bool EmulatesLineCoverage() const {
+      return m_emulatesLineCoverage;
+    }
+
+    DxvkRasterizerState GetLineCoverageState() const {
+      return m_lineCoverageState;
+    }
+
     DxvkDepthBias GetDepthBias() const {
       return m_depthBias;
     }
@@ -75,6 +83,8 @@ namespace dxvk {
     D3D11_RASTERIZER_DESC2 m_desc;
     DxvkRasterizerState    m_state      = { };
     DxvkRasterizerState    m_tirState   = { };
+    DxvkRasterizerState    m_lineCoverageState = { };
+    bool                   m_emulatesLineCoverage = false;
     DxvkDepthBias          m_depthBias  = { };
     D3D10RasterizerState   m_d3d10;
 

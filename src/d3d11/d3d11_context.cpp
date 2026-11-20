@@ -3588,6 +3588,9 @@ namespace dxvk {
 
     D3D11TirDraw draw = DetermineTargetIndependentRasterization();
 
+    if (draw.gs == nullptr)
+      draw = DetermineLineCoverage();
+
     if (draw.gs != nullptr) {
       if (unlikely(draw.gs->needsCompile()))
         m_device->requestCompileShader(draw.gs);
@@ -3679,6 +3682,66 @@ namespace dxvk {
     if (!s_warned.exchange(true))
       Logger::warn(str::format("D3D11: Target-independent rasterization at ", sampleCount, " samples not emulated for this draw"));
 
+    return draw;
+  }
+
+
+  template<typename ContextType>
+  D3D11TirDraw D3D11CommonContext<ContextType>::DetermineLineCoverage() {
+    D3D11TirDraw draw = { };
+
+    auto rs = m_state.rs.state.ptr();
+
+    if (likely(!rs || !rs->EmulatesLineCoverage()))
+      return draw;
+
+    D3D11_PRIMITIVE_TOPOLOGY topology = m_state.ia.primitiveTopology;
+
+    bool adjacency = topology == D3D11_PRIMITIVE_TOPOLOGY_LINELIST_ADJ
+                  || topology == D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;
+
+    bool lines = adjacency
+              || topology == D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+              || topology == D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+
+    if (m_state.ds != nullptr) {
+      adjacency = false;
+      lines = m_state.ds->GetCommonShader()->GetShader()->metadata().outputTopology
+        == VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+
+      if (m_state.hs != nullptr && m_state.hs->GetCommonShader()->GetShader()->metadata()
+          .flags.test(DxvkShaderFlag::TessellationPoints))
+        lines = false;
+    }
+
+    if (!lines || m_state.vs == nullptr || m_state.ps == nullptr || !m_state.rs.numViewports)
+      return draw;
+
+    if (m_state.gs != nullptr) {
+      static std::atomic<bool> s_warned = { false };
+
+      if (!s_warned.exchange(true))
+        Logger::warn("D3D11: Antialiased lines from a geometry shader are drawn aliased");
+
+      return draw;
+    }
+
+    auto prevStage = m_state.ds != nullptr
+      ? m_state.ds->GetCommonShader()->GetShader()
+      : m_state.vs->GetCommonShader()->GetShader();
+
+    auto shaders = m_parent->GetLineCoverage().GetShaders(prevStage,
+      m_state.ps->GetCommonShader()->GetShader(), adjacency);
+
+    if (shaders.gs == nullptr)
+      return draw;
+
+    draw.gs = shaders.gs;
+    draw.ps = shaders.ps;
+    draw.rs = rs->GetLineCoverageState();
+
+    const auto& vp = m_state.rs.viewports[0u];
+    draw.viewport = {{ vp.TopLeftX, vp.TopLeftY, vp.Width, vp.Height }};
     return draw;
   }
 

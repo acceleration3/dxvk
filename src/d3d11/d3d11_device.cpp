@@ -52,6 +52,7 @@ namespace dxvk {
     m_d3d11Options      (m_dxvkDevice->instance()->config()),
     m_shaderOptions     (GetShaderOptions(m_dxvkDevice, m_d3d11Options)),
     m_tirShaders        (this),
+    m_lineCoverage      (this),
     m_maxFeatureLevel   (D3D11DeviceFeatures::GetMaxFeatureLevel(*m_dxvkDevice)),
     m_deviceFeatures    (*m_dxvkDevice, m_d3d11Options, m_featureLevel) {
     // This option might lead to long-running submissions

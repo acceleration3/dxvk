@@ -857,6 +857,8 @@ namespace dxvk {
 
     D3D11TirDraw DetermineTargetIndependentRasterization();
 
+    D3D11TirDraw DetermineLineCoverage();
+
     void BatchDraw(
       const VkDrawIndirectCommand&            draw);
 

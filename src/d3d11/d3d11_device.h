@@ -22,6 +22,7 @@
 #include "d3d11_options.h"
 #include "d3d11_shader.h"
 #include "d3d11_state.h"
+#include "d3d11_line_coverage.h"
 #include "d3d11_tir.h"
 #include "d3d11_util.h"
 
@@ -468,6 +469,10 @@ namespace dxvk {
       return m_tirShaders;
     }
 
+    D3D11LineCoverage& GetLineCoverage() {
+      return m_lineCoverage;
+    }
+
     D3D10Device* GetD3D10Interface() const {
       return m_d3d10Device;
     }
@@ -525,6 +530,7 @@ namespace dxvk {
     D3D11StateObjectSet<D3D11SamplerState>      m_samplerObjects;
     D3D11ShaderModuleSet                        m_shaderModules;
     D3D11TirShaders                             m_tirShaders;
+    D3D11LineCoverage                           m_lineCoverage;
 
     D3D_FEATURE_LEVEL               m_maxFeatureLevel;
     D3D11DeviceFeatures             m_deviceFeatures;
