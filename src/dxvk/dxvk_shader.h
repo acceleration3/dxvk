@@ -116,6 +116,7 @@ namespace dxvk {
     SupportsDescriptorHeap      = 21u,
     /// Whether scratch memory should be zeroed.
     ZeroScratchMemory           = 22u,
+    SupportsRasterizationStreamSelect = 23u,
   };
 
   using DxvkShaderSpirvFlags = Flags<DxvkShaderSpirvFlag>;

@@ -588,7 +588,7 @@ namespace dxvk {
     // Rasterizing stream 0 is default behaviour in all situations.
     int32_t streamIndex = shaders.gs ? shaders.gs->metadata().rasterizedStream : 0;
 
-    if (streamIndex > 0) {
+    if (streamIndex > 0 && device->properties().extTransformFeedback.transformFeedbackRasterizationStreamSelect) {
       rsXfbStreamInfo.pNext = std::exchange(rsInfo.pNext, &rsXfbStreamInfo);
       rsXfbStreamInfo.rasterizationStream = uint32_t(streamIndex);
     } else if (streamIndex < 0) {
