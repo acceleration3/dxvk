@@ -83,7 +83,7 @@ namespace dxvk {
 
   };
 
-  class D3D9VkInteropDevice final : public ID3D9VkInteropDevice {
+  class D3D9VkInteropDevice final : public ID3D9VkInteropDevice1 {
 
   public:
 
@@ -133,6 +133,28 @@ namespace dxvk {
     HRESULT STDMETHODCALLTYPE CreateImage(
             const D3D9VkExtImageDesc* desc,
             IDirect3DResource9**      ppResult);
+
+    HRESULT STDMETHODCALLTYPE BindBufferStorage(
+            IDirect3DResource9*  pResource,
+            VkBuffer             Storage,
+            VkDeviceSize         Offset,
+            VkDeviceSize         Length,
+            void*                pMapPtr);
+
+    void STDMETHODCALLTYPE FlushCommands();
+
+    HRESULT STDMETHODCALLTYPE BufferStorageBindable(
+            IDirect3DResource9*  pResource);
+
+    HRESULT STDMETHODCALLTYPE UnbindBufferStorage(
+            IDirect3DResource9*  pResource);
+
+    HRESULT STDMETHODCALLTYPE MarkSubmission(
+            void (*pCallback)(void*, uint64_t),
+            void*                pContext,
+            uint64_t             Value);
+
+    void STDMETHODCALLTYPE WaitForIdle();
 
   private:
 
