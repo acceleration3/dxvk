@@ -803,6 +803,9 @@ namespace dxvk {
     if (m_features.nvRawAccessChains.shaderRawAccessChains)
       m_shaderOptions.spirv.set(DxvkShaderSpirvFlag::SupportsNvRawAccessChains);
 
+    if (m_properties.extTransformFeedback.transformFeedbackRasterizationStreamSelect)
+      m_shaderOptions.spirv.set(DxvkShaderSpirvFlag::SupportsRasterizationStreamSelect);
+
     // Mesa drivers generally optimize large constant arrays to a buffer, some other
     // drivers do not and suffer a significant performance loss. Enable lowering on
     // those drivers.
