@@ -613,6 +613,9 @@ namespace dxvk {
 
     std::string withheld = env::getEnvVar("AV_TEST_HOST_WITHOUT");
 
+    if (withheld.find("fragmentShaderBarycentric") != std::string::npos)
+      m_featuresSupported.khrFragmentShaderBarycentric.fragmentShaderBarycentric = VK_FALSE;
+
     if (withheld.find("smoothLines") != std::string::npos)
       m_featuresSupported.extLineRasterization.smoothLines = VK_FALSE;
 
