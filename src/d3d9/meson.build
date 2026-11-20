@@ -11,6 +11,7 @@ d3d9_shaders = files([
   'shaders/d3d9_fixed_function_vert.vert',
   'shaders/d3d9_fixed_function_frag.frag',
   'shaders/d3d9_fixed_function_frag_sample.frag',
+  'shaders/d3d9_fixed_function_frag_wrap.frag',
 ])
 
 d3d9_src = [

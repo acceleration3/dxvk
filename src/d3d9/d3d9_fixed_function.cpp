@@ -15,12 +15,14 @@
 #include <d3d9_fixed_function_vert.h>
 #include <d3d9_fixed_function_frag.h>
 #include <d3d9_fixed_function_frag_sample.h>
+#include <d3d9_fixed_function_frag_wrap.h>
 
 namespace dxvk {
 
   D3D9FFShaderModuleSet::D3D9FFShaderModuleSet(D3D9DeviceEx* pDevice)
     : m_vs(buildVs())
-    , m_fs(buildFs(pDevice)) {}
+    , m_fs(buildFs(pDevice, false))
+    , m_fsWrap(pDevice->SupportsTexCoordWrap() ? buildFs(pDevice, true) : nullptr) {}
 
 
   Rc<DxvkShader> D3D9FFShaderModuleSet::buildVs() {
@@ -65,7 +67,7 @@ namespace dxvk {
   }
 
 
-  Rc<DxvkShader> D3D9FFShaderModuleSet::buildFs(D3D9DeviceEx* pDevice) {
+  Rc<DxvkShader> D3D9FFShaderModuleSet::buildFs(D3D9DeviceEx* pDevice, bool wrapTexCoords) {
     small_vector<DxvkBindingInfo, 10> bindings = {};
 
     auto& sharedDataBinding = bindings.emplace_back();
@@ -117,6 +119,9 @@ namespace dxvk {
     info.samplerHeap = DxvkShaderBinding(VK_SHADER_STAGE_FRAGMENT_BIT, SamplerSet, 0u);
     info.specDataBuffer = DxvkShaderBinding(VK_SHADER_STAGE_FRAGMENT_BIT, SpecDataSet, 0u);
     info.debugName = "FF FS";
+
+    if (wrapTexCoords)
+      return new DxvkSpirvShader(info, d3d9_fixed_function_frag_wrap);
 
     return pDevice->GetOptions()->forceSampleRateShading
       ? new DxvkSpirvShader(info, d3d9_fixed_function_frag_sample)

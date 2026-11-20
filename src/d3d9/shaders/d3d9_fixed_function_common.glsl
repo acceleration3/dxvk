@@ -70,7 +70,7 @@ layout(set = SPEC_DATA_SET, binding = 0, scalar) uniform SpecConsts {
     uint psSamplerTypes;
     uint psSamplerModes;
     uint unused_psBools;
-    uint unused_spec7;
+    uint texCoordWrap;
     uint packedStageOps01;
     uint packedStageOps23;
     uint packedStageOps45;

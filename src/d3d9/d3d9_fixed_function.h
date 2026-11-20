@@ -50,17 +50,21 @@ namespace dxvk {
     explicit D3D9FFShaderModuleSet(D3D9DeviceEx* pDevice);
 
     template<D3D9ShaderType Stage>
-    Rc<DxvkShader> GetShader() {
-      return Stage == D3D9ShaderType::VertexShader ? m_vs : m_fs;
+    Rc<DxvkShader> GetShader(bool wrapTexCoords = false) {
+      if (Stage == D3D9ShaderType::VertexShader)
+        return m_vs;
+
+      return wrapTexCoords ? m_fsWrap : m_fs;
     }
 
   private:
 
     Rc<DxvkShader> m_vs;
     Rc<DxvkShader> m_fs;
+    Rc<DxvkShader> m_fsWrap;
 
     static Rc<DxvkShader> buildVs();
-    static Rc<DxvkShader> buildFs(D3D9DeviceEx* pDevice);
+    static Rc<DxvkShader> buildFs(D3D9DeviceEx* pDevice, bool wrapTexCoords);
 
     constexpr static uint32_t GetPushSamplerOffset(uint32_t samplerIndex) {
       // Located directly after the PS push data block.

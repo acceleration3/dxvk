@@ -48,6 +48,7 @@ namespace dxvk {
     HANDLE_EXT(khrCalibratedTimestamps);           \
     HANDLE_EXT(khrDeviceFault);                    \
     HANDLE_EXT(khrDynamicRenderingLocalRead);      \
+    HANDLE_EXT(khrFragmentShaderBarycentric);      \
     HANDLE_EXT(khrExternalMemoryWin32);            \
     HANDLE_EXT(khrExternalSemaphoreWin32);         \
     HANDLE_EXT(khrExternalMemoryFd);               \
@@ -1005,6 +1006,9 @@ namespace dxvk {
       /* Enables client API features */
       ENABLE_EXT_FEATURE(extFragmentShaderInterlock, fragmentShaderSampleInterlock, false),
       ENABLE_EXT_FEATURE(extFragmentShaderInterlock, fragmentShaderPixelInterlock, false),
+
+      /* Per-vertex fragment inputs, used for D3D9 texture coordinate wrapping */
+      ENABLE_EXT_FEATURE(khrFragmentShaderBarycentric, fragmentShaderBarycentric, false),
 
       /* Windows-only extension to work around driver-side FSE issues */
       ENABLE_EXT(extFullScreenExclusive, false),

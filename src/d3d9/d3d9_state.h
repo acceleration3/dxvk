@@ -144,8 +144,9 @@ namespace dxvk {
     uint16_t psBoolConstants = 0u;
     uint16_t spec6Pad = 0u;
 
-    // Spec ID 7: Reserved.
-    uint32_t spec7Pad = 0u;
+    // Spec ID 7: Texture coordinate wrapping for fixed-function pixel
+    // shaders. Four bits per texture stage, one for each component.
+    uint32_t texCoordWrap = 0u;
 
     // Spec ID 8..11: Texture stage ops for fixed function.
     // Each stage is packed as follows:
@@ -219,6 +220,10 @@ namespace dxvk {
         nullMask      >> FirstVSSamplerSlot, 0u,
         drefMask      >> FirstVSSamplerSlot,
         drefClampMask >> FirstVSSamplerSlot);
+    }
+
+    bool setTexCoordWrap(uint32_t mask) {
+      return set(texCoordWrap, mask);
     }
 
     bool setPsShaderModel(uint32_t majorVersion) {

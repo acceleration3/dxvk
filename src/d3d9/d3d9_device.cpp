@@ -2492,6 +2492,17 @@ namespace dxvk {
           m_dirty.set(D3D9DeviceDirtyFlag::ClipPlanes);
           break;
 
+        case D3DRS_WRAP0:
+        case D3DRS_WRAP1:
+        case D3DRS_WRAP2:
+        case D3DRS_WRAP3:
+        case D3DRS_WRAP4:
+        case D3DRS_WRAP5:
+        case D3DRS_WRAP6:
+        case D3DRS_WRAP7:
+          m_dirty.set(D3D9DeviceDirtyFlag::FFPixelShader);
+          break;
+
         case D3DRS_ALPHAREF:
           m_pushData.shared.alphaRef = Value;
           m_dirty.set(D3D9DeviceDirtyFlag::PushDataShared);
@@ -3505,6 +3516,8 @@ namespace dxvk {
     const bool usesProgrammableVS = UseProgrammableVS();
 
     if (unlikely(usesProgrammableVS != wasUsingProgrammableVS)) {
+      m_dirty.set(D3D9DeviceDirtyFlag::FFPixelShader);
+
       if (usesProgrammableVS) {
         BindShader<D3D9ShaderType::VertexShader>(GetCommonShader(m_state.vertexShader));
       } else {
@@ -3624,6 +3637,9 @@ namespace dxvk {
     m_state.vertexShader = shader;
 
     const bool usesProgrammableVS = UseProgrammableVS();
+
+    if (usesProgrammableVS != wasUsingProgrammableVS)
+      m_dirty.set(D3D9DeviceDirtyFlag::FFPixelShader);
 
     if (usesProgrammableVS) {
       BindShader<D3D9ShaderType::VertexShader>(GetCommonShader(shader));
@@ -4758,7 +4774,8 @@ namespace dxvk {
           break;
 
         case DXVK_TSS_TEXCOORDINDEX:
-          m_dirty.set(D3D9DeviceDirtyFlag::FFVertexData);
+          m_dirty.set(D3D9DeviceDirtyFlag::FFVertexData,
+                      D3D9DeviceDirtyFlag::FFPixelShader);
           break;
 
         case DXVK_TSS_TEXTURETRANSFORMFLAGS:
@@ -4785,6 +4802,11 @@ namespace dxvk {
     }
 
     return D3D_OK;
+  }
+
+
+  bool D3D9DeviceEx::SupportsTexCoordWrap() {
+    return m_dxvkDevice->features().khrFragmentShaderBarycentric.fragmentShaderBarycentric;
   }
 
 
@@ -7692,7 +7714,7 @@ namespace dxvk {
       : VK_SHADER_STAGE_FRAGMENT_BIT;
 
     EmitCs([
-      cShader = m_ffModules.GetShader<ShaderStage>()
+      cShader = m_ffModules.GetShader<ShaderStage>(m_ffPsWrapsTexCoords)
     ](DxvkContext* ctx) mutable {
       ctx->bindShader<Stage>(std::move(cShader));
     });
@@ -8533,6 +8555,27 @@ namespace dxvk {
 
     for (uint32_t i = activeTextureStageCount; i < caps::TextureStageCount; i++)
       dirty |= m_specData.disableTextureStage(i);
+
+    uint32_t texCoordWrap = 0u;
+
+    if (SupportsTexCoordWrap()) {
+      const bool useTexcoordIndex = !UseProgrammableVS();
+
+      for (uint32_t i = 0u; i < activeTextureStageCount; i++) {
+        uint32_t set = useTexcoordIndex
+          ? m_state.textureStages[i][DXVK_TSS_TEXCOORDINDEX] & 0b111u
+          : i;
+
+        texCoordWrap |= (m_state.renderStates[D3DRS_WRAP0 + set] & 0xfu) << (4u * i);
+      }
+    }
+
+    dirty |= m_specData.setTexCoordWrap(texCoordWrap);
+
+    if (m_ffPsWrapsTexCoords != (texCoordWrap != 0u)) {
+      m_ffPsWrapsTexCoords = texCoordWrap != 0u;
+      BindFFUbershader<D3D9ShaderType::PixelShader>();
+    }
 
     if (dirty)
       m_dirty.set(D3D9DeviceDirtyFlag::SpecializationEntries);

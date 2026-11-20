@@ -5,6 +5,9 @@
 #extension GL_ARB_derivative_control : require
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_nonuniform_qualifier : require
+#ifdef WRAP_TEXCOORDS
+#extension GL_EXT_fragment_shader_barycentric : require
+#endif
 
 #include "d3d9_fixed_function_common.glsl"
 
@@ -14,6 +17,16 @@
 #endif
 
 layout(location = 0) INTERP_MODE in vec4 in_Normal;
+#ifdef WRAP_TEXCOORDS
+layout(location = 1) pervertexEXT in vec4 in_Texcoord0[3];
+layout(location = 2) pervertexEXT in vec4 in_Texcoord1[3];
+layout(location = 3) pervertexEXT in vec4 in_Texcoord2[3];
+layout(location = 4) pervertexEXT in vec4 in_Texcoord3[3];
+layout(location = 5) pervertexEXT in vec4 in_Texcoord4[3];
+layout(location = 6) pervertexEXT in vec4 in_Texcoord5[3];
+layout(location = 7) pervertexEXT in vec4 in_Texcoord6[3];
+layout(location = 8) pervertexEXT in vec4 in_Texcoord7[3];
+#else
 layout(location = 1) INTERP_MODE in vec4 in_Texcoord0;
 layout(location = 2) INTERP_MODE in vec4 in_Texcoord1;
 layout(location = 3) INTERP_MODE in vec4 in_Texcoord2;
@@ -22,6 +35,7 @@ layout(location = 5) INTERP_MODE in vec4 in_Texcoord4;
 layout(location = 6) INTERP_MODE in vec4 in_Texcoord5;
 layout(location = 7) INTERP_MODE in vec4 in_Texcoord6;
 layout(location = 8) INTERP_MODE in vec4 in_Texcoord7;
+#endif
 layout(location = 9) INTERP_MODE in vec4 in_Color0;
 layout(location = 10) INTERP_MODE in vec4 in_Color1;
 layout(location = 11) INTERP_MODE in float in_Fog;
@@ -529,12 +543,41 @@ struct TextureStageState {
     bool premodulateAlpha;
 };
 
-vec4 getTexCoord(uint stage) {
-    // If point sprites are enabled, we need to replace the
-    // input texture coordinate with the point coordinate
-    if (isPointSpriteEnabled())
-        return vec4(gl_PointCoord, 0.0f, 0.0f);
+#ifdef WRAP_TEXCOORDS
+uint getTexCoordWrapMask(uint stage) {
+    return bitfieldExtract(texCoordWrap, int(stage) * 4, 4);
+}
 
+vec4 wrapTexCoord(vec4 v0, vec4 v1, vec4 v2, uint mask) {
+    vec4 weights = vec4(0.0f);
+
+    for (uint i = 0; i < 4; i++)
+        weights[i] = (mask & (1u << i)) != 0u ? 1.0f : 0.0f;
+
+    v1 -= weights * floor(v1 - v0 + 0.5f);
+    v2 -= weights * floor(v2 - v0 + 0.5f);
+
+    return v0 * gl_BaryCoordEXT.x + v1 * gl_BaryCoordEXT.y + v2 * gl_BaryCoordEXT.z;
+}
+
+vec4 getStageTexCoord(uint stage) {
+    uint mask = getTexCoordWrapMask(stage);
+
+    switch (stage) {
+        case 0: return wrapTexCoord(in_Texcoord0[0], in_Texcoord0[1], in_Texcoord0[2], mask);
+        case 1: return wrapTexCoord(in_Texcoord1[0], in_Texcoord1[1], in_Texcoord1[2], mask);
+        case 2: return wrapTexCoord(in_Texcoord2[0], in_Texcoord2[1], in_Texcoord2[2], mask);
+        case 3: return wrapTexCoord(in_Texcoord3[0], in_Texcoord3[1], in_Texcoord3[2], mask);
+        case 4: return wrapTexCoord(in_Texcoord4[0], in_Texcoord4[1], in_Texcoord4[2], mask);
+        case 5: return wrapTexCoord(in_Texcoord5[0], in_Texcoord5[1], in_Texcoord5[2], mask);
+        case 6: return wrapTexCoord(in_Texcoord6[0], in_Texcoord6[1], in_Texcoord6[2], mask);
+        case 7: return wrapTexCoord(in_Texcoord7[0], in_Texcoord7[1], in_Texcoord7[2], mask);
+    }
+
+    return vec4(0.0f);
+}
+#else
+vec4 getStageTexCoord(uint stage) {
     switch (stage) {
         case 0: return in_Texcoord0;
         case 1: return in_Texcoord1;
@@ -547,6 +590,16 @@ vec4 getTexCoord(uint stage) {
     }
 
     return vec4(0.0f);
+}
+#endif
+
+vec4 getTexCoord(uint stage) {
+    // If point sprites are enabled, we need to replace the
+    // input texture coordinate with the point coordinate
+    if (isPointSpriteEnabled())
+        return vec4(gl_PointCoord, 0.0f, 0.0f);
+
+    return getStageTexCoord(stage);
 }
 
 TextureStageState runTextureStage(uint stage, TextureStageState state) {

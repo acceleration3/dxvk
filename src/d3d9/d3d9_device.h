@@ -804,6 +804,8 @@ namespace dxvk {
      */
     bool SupportsSWVP();
 
+    bool SupportsTexCoordWrap();
+
     bool SupportsVCacheQuery() const;
 
     HWND GetWindow();
@@ -1628,6 +1630,7 @@ namespace dxvk {
     D3D9VBSlotTracking              m_vbSlotTracking;
 
     bool                            m_isSWVP;
+    bool                            m_ffPsWrapsTexCoords = false;
     bool                            m_ffZTest          = false;
 
     // the enablement of below features is tracked independently
