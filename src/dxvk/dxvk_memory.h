@@ -1506,6 +1506,8 @@ namespace dxvk {
     uint32_t countEmptyChunksInPool(
       const DxvkMemoryPool&       pool) const;
 
+    void freeAllEmptyChunksLocked();
+
     void freeEmptyChunksForType(
             DxvkMemoryType&       type,
             VkDeviceSize          allocationSize,

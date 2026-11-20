@@ -1402,6 +1402,9 @@ namespace dxvk {
     const bool gated = isGated(type);
     const bool hostGated = isHostGated(type);
 
+    if (m_vramAccount.reliefWanted())
+      freeAllEmptyChunksLocked();
+
     if (hostGated && !m_vramAccount.takeHost(size)) {
       freeEmptyChunksInHeap(*type.heap, VkDeviceSize(-1), high_resolution_clock::time_point());
 
@@ -1857,6 +1860,12 @@ namespace dxvk {
 
     if (freed)
       updateMemoryHeapStats(heap.index);
+  }
+
+
+  void DxvkMemoryAllocator::freeAllEmptyChunksLocked() {
+    for (uint32_t i = 0; i < m_memHeapCount; i++)
+      freeEmptyChunksInHeap(m_memHeaps[i], VkDeviceSize(-1), high_resolution_clock::time_point());
   }
 
 
@@ -2899,6 +2908,11 @@ namespace dxvk {
 
   void DxvkMemoryAllocator::performTimedTasks() {
     static constexpr auto Interval = std::chrono::milliseconds(500u);
+
+    if (m_vramAccount.reliefWanted()) {
+      std::unique_lock lock(m_mutex);
+      freeAllEmptyChunksLocked();
+    }
 
     // This function shouldn't be called concurrently, so checking and
     // updating the deadline is fine without taking the global lock
