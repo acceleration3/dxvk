@@ -806,6 +806,12 @@ namespace dxvk {
 
     bool SupportsTexCoordWrap();
 
+    bool InterpolatesTexCoordWrap();
+
+    bool ShiftsTexCoordWrap();
+
+    void BindWrapGeometryShader(D3DPRIMITIVETYPE PrimType);
+
     bool SupportsVCacheQuery() const;
 
     HWND GetWindow();
@@ -1631,6 +1637,8 @@ namespace dxvk {
 
     bool                            m_isSWVP;
     bool                            m_ffPsWrapsTexCoords = false;
+    bool                            m_ffGsWrapsTexCoords = false;
+    bool                            m_ffGsWrapBound      = false;
     bool                            m_ffZTest          = false;
 
     // the enablement of below features is tracked independently

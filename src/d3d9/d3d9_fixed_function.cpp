@@ -16,13 +16,30 @@
 #include <d3d9_fixed_function_frag.h>
 #include <d3d9_fixed_function_frag_sample.h>
 #include <d3d9_fixed_function_frag_wrap.h>
+#include <d3d9_fixed_function_geom_wrap.h>
 
 namespace dxvk {
 
   D3D9FFShaderModuleSet::D3D9FFShaderModuleSet(D3D9DeviceEx* pDevice)
     : m_vs(buildVs())
     , m_fs(buildFs(pDevice, false))
-    , m_fsWrap(pDevice->SupportsTexCoordWrap() ? buildFs(pDevice, true) : nullptr) {}
+    , m_fsWrap(pDevice->InterpolatesTexCoordWrap() ? buildFs(pDevice, true) : nullptr)
+    , m_gsWrap(pDevice->ShiftsTexCoordWrap() ? buildGs() : nullptr) {}
+
+
+  Rc<DxvkShader> D3D9FFShaderModuleSet::buildGs() {
+    DxvkSpirvShaderCreateInfo info;
+    info.bindingCount = 0u;
+    info.bindings = nullptr;
+    info.flatShadingInputs = 0;
+    info.sharedPushData = DxvkPushDataBlock();
+    info.localPushData = DxvkPushDataBlock();
+    info.samplerHeap = DxvkShaderBinding();
+    info.specDataBuffer = DxvkShaderBinding(VK_SHADER_STAGE_GEOMETRY_BIT, SpecDataSet, 0u);
+    info.debugName = "FF GS wrap";
+
+    return new DxvkSpirvShader(info, d3d9_fixed_function_geom_wrap);
+  }
 
 
   Rc<DxvkShader> D3D9FFShaderModuleSet::buildVs() {

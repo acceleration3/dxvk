@@ -3436,6 +3436,8 @@ namespace dxvk {
       ctx->bindShader<VK_SHADER_STAGE_GEOMETRY_BIT>(nullptr);
     });
 
+    m_ffGsWrapBound = false;
+
     // We unbound the pixel shader before,
     // let's make sure that gets rebound.
     if (m_state.pixelShader != nullptr) {
@@ -4806,7 +4808,17 @@ namespace dxvk {
 
 
   bool D3D9DeviceEx::SupportsTexCoordWrap() {
+    return InterpolatesTexCoordWrap() || ShiftsTexCoordWrap();
+  }
+
+
+  bool D3D9DeviceEx::InterpolatesTexCoordWrap() {
     return m_dxvkDevice->features().khrFragmentShaderBarycentric.fragmentShaderBarycentric;
+  }
+
+
+  bool D3D9DeviceEx::ShiftsTexCoordWrap() {
+    return !InterpolatesTexCoordWrap() && m_dxvkDevice->features().core.features.geometryShader;
   }
 
 
@@ -7623,6 +7635,9 @@ namespace dxvk {
                     D3D9DeviceDirtyFlag::PushDataFfps))
       UpdatePushData();
 
+    if (unlikely(m_ffGsWrapsTexCoords || m_ffGsWrapBound))
+      BindWrapGeometryShader(PrimitiveType);
+
     ApplyPrimitiveType(PrimitiveType);
   }
 
@@ -8572,10 +8587,14 @@ namespace dxvk {
 
     dirty |= m_specData.setTexCoordWrap(texCoordWrap);
 
-    if (m_ffPsWrapsTexCoords != (texCoordWrap != 0u)) {
-      m_ffPsWrapsTexCoords = texCoordWrap != 0u;
+    const bool interpolated = texCoordWrap != 0u && InterpolatesTexCoordWrap();
+
+    if (m_ffPsWrapsTexCoords != interpolated) {
+      m_ffPsWrapsTexCoords = interpolated;
       BindFFUbershader<D3D9ShaderType::PixelShader>();
     }
+
+    m_ffGsWrapsTexCoords = texCoordWrap != 0u && !interpolated;
 
     if (dirty)
       m_dirty.set(D3D9DeviceDirtyFlag::SpecializationEntries);
@@ -8601,6 +8620,27 @@ namespace dxvk {
 
   bool D3D9DeviceEx::UseProgrammablePS() {
     return m_state.pixelShader != nullptr;
+  }
+
+
+  void D3D9DeviceEx::BindWrapGeometryShader(D3DPRIMITIVETYPE PrimType) {
+    const bool triangles = PrimType == D3DPT_TRIANGLELIST
+                        || PrimType == D3DPT_TRIANGLESTRIP
+                        || PrimType == D3DPT_TRIANGLEFAN;
+
+    const bool wanted = m_ffGsWrapsTexCoords && triangles
+                     && !UseProgrammableVS() && !UseProgrammablePS();
+
+    if (wanted == m_ffGsWrapBound)
+      return;
+
+    m_ffGsWrapBound = wanted;
+
+    EmitCs([
+      cShader = wanted ? m_ffModules.GetWrapGeometryShader() : nullptr
+    ] (DxvkContext* ctx) mutable {
+      ctx->bindShader<VK_SHADER_STAGE_GEOMETRY_BIT>(std::move(cShader));
+    });
   }
 
 

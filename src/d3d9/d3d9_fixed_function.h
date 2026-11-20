@@ -57,14 +57,20 @@ namespace dxvk {
       return wrapTexCoords ? m_fsWrap : m_fs;
     }
 
+    Rc<DxvkShader> GetWrapGeometryShader() const {
+      return m_gsWrap;
+    }
+
   private:
 
     Rc<DxvkShader> m_vs;
     Rc<DxvkShader> m_fs;
     Rc<DxvkShader> m_fsWrap;
+    Rc<DxvkShader> m_gsWrap;
 
     static Rc<DxvkShader> buildVs();
     static Rc<DxvkShader> buildFs(D3D9DeviceEx* pDevice, bool wrapTexCoords);
+    static Rc<DxvkShader> buildGs();
 
     constexpr static uint32_t GetPushSamplerOffset(uint32_t samplerIndex) {
       // Located directly after the PS push data block.
