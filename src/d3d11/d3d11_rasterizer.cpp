@@ -63,6 +63,8 @@ namespace dxvk {
     } else if (desc.AntialiasedLineEnable) {
       if (features.extLineRasterization.smoothLines)
         m_state.setLineMode(VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT);
+    } else if (features.extLineRasterization.bresenhamLines) {
+      m_state.setLineMode(VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT);
     }
 
     // Target-independent rasterization is emulated at one sample, the

@@ -625,9 +625,11 @@ namespace dxvk {
       rsLineInfo.pNext = std::exchange(rsInfo.pNext, &rsLineInfo);
       rsLineInfo.lineRasterizationMode = state.rs.lineMode();
 
-      rsInfo.lineWidth = 1.4f;
+      if (rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT)
+        rsInfo.lineWidth = 1.4f;
 
-      if (rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_RECTANGULAR_EXT) {
+      if (rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_RECTANGULAR_EXT
+       && rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT) {
         bool needsOverride = state.ms.enableAlphaToCoverage()
           || (shaders.fs && shaders.fs->metadata().flags.test(DxvkShaderFlag::HasSampleRateShading));
 

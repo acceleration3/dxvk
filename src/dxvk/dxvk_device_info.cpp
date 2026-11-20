@@ -1012,6 +1012,7 @@ namespace dxvk {
       ENABLE_EXT(extHdrMetadata, false),
 
       /* Line rasterization features for client APIs */
+      ENABLE_EXT_FEATURE(extLineRasterization, bresenhamLines, false),
       ENABLE_EXT_FEATURE(extLineRasterization, rectangularLines,  false),
       ENABLE_EXT_FEATURE(extLineRasterization, smoothLines, false),
 
