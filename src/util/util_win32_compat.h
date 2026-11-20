@@ -4,6 +4,8 @@
 
 #include <windows.h>
 #include <dlfcn.h>
+#include <stdint.h>
+#include <unistd.h>
 
 #include "log/log.h"
 
@@ -40,9 +42,13 @@ inline BOOL ReleaseSemaphore(
   return FALSE;
 }
 
+// A native build has no event objects: the embedder hands an eventfd where
+// Windows takes an event HANDLE, as vkd3d-proton takes one, and setting the
+// event writes it.
 inline BOOL SetEvent(HANDLE hEvent) {
-  dxvk::Logger::warn("SetEvent not implemented.");
-  return FALSE;
+  const uint64_t one = 1;
+  const int fd = static_cast<int>(reinterpret_cast<intptr_t>(hEvent));
+  return write(fd, &one, sizeof(one)) == static_cast<ssize_t>(sizeof(one));
 }
 
 inline BOOL DuplicateHandle(
