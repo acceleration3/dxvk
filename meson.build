@@ -173,11 +173,6 @@ else
   
   dxvk_name_prefix = 'dxvk_'
   dxvk_pkg_prefix = 'dxvk-'
-
-  link_args += [
-    '-static-libgcc',
-    '-static-libstdc++',
-  ]
 endif
 
 dxbc_spirv = subproject('dxbc-spirv')
