@@ -877,6 +877,7 @@ namespace dxvk {
 
       ENABLE_FEATURE(vk11, shaderDrawParameters, true),
       ENABLE_FEATURE(vk11, storageBuffer16BitAccess, true),
+      ENABLE_FEATURE(vk11, storageInputOutput16, false),
       ENABLE_FEATURE(vk11, storagePushConstant16, false),
 
       ENABLE_FEATURE(vk12, bufferDeviceAddress, true),
