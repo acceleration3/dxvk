@@ -1462,6 +1462,11 @@ namespace dxvk {
           && (type.properties.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     }
 
+    bool isHostGated(const DxvkMemoryType& type) const {
+      return m_vramAccount.active()
+          && !(type.properties.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+
     bool allowsFallback(const DxvkAllocationInfo& info) const {
       return !m_vramAccount.active() && !info.mode.test(DxvkAllocationMode::NoFallback);
     }

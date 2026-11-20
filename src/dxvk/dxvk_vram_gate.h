@@ -24,6 +24,8 @@ namespace dxvk {
     void     (*close)(void* self, void* account);
     uint64_t (*freeBytes)(void* account);
     uint64_t (*cap)(void* account);
+    int      (*takeHost)(void* account, uint64_t bytes);
+    void     (*giveHost)(void* account, uint64_t bytes);
   };
 
   inline const DxvkVramGate* g_vramGate = nullptr;
@@ -71,6 +73,15 @@ namespace dxvk {
     void give(VkDeviceSize bytes) const {
       if (m_account)
         m_gate->give(m_account, bytes);
+    }
+
+    bool takeHost(VkDeviceSize bytes) const {
+      return !m_account || m_gate->takeHost(m_account, bytes);
+    }
+
+    void giveHost(VkDeviceSize bytes) const {
+      if (m_account)
+        m_gate->giveHost(m_account, bytes);
     }
 
   private:
