@@ -188,9 +188,25 @@ namespace dxvk::vk {
    * Vulkan functions for a specific Vulkan device.
    * This ensures that no slow dispatch code is executed.
    */
+  struct TeardownOrder {
+    uint32_t size;
+    void*    self;
+    int      (*neededBy)(void* self, uint32_t driverId);
+    void     (*compiling)(void* self);
+    void     (*compiled)(void* self);
+    void     (*destroying)(void* self);
+    void     (*destroyed)(void* self);
+  };
+
+  inline const TeardownOrder* g_teardownOrder = nullptr;
+
   struct DeviceFn : DeviceLoader {
     DeviceFn(const Rc<InstanceLoader>& library, bool owned, VkDevice device);
     ~DeviceFn();
+
+    void orderTeardown(VkDriverId driver);
+
+    const TeardownOrder* m_teardownOrder = nullptr;
     
     VULKAN_FN(vkDestroyDevice);
     VULKAN_FN(vkGetDeviceQueue);

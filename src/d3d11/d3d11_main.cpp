@@ -224,6 +224,11 @@ extern "C" {
     }
 
 
+    DLLEXPORT void dxvk_proton_set_teardown_order(const dxvk::vk::TeardownOrder* order) {
+      dxvk::vk::g_teardownOrder = order && order->size >= sizeof(dxvk::vk::TeardownOrder) ? order : nullptr;
+    }
+
+
     DLLEXPORT HRESULT __stdcall D3D11CoreCreateDevice(
             IDXGIFactory*       pFactory,
             IDXGIAdapter*       pAdapter,

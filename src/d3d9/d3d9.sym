@@ -21,6 +21,7 @@
     Direct3DCreate9On12;
     Direct3DCreate9On12Ex;
     dxvk_proton_set_vram_gate;
+    dxvk_proton_set_teardown_order;
     dxvk_take_out_of_memory;
 
   local:

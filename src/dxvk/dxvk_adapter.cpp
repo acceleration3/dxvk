@@ -345,6 +345,7 @@ namespace dxvk {
     }
 
     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(vk, true, device);
+    vkd->orderTeardown(m_capabilities.getProperties().vk12.driverID);
 
     DxvkDeviceQueueSet deviceQueues = { };
     deviceQueues.graphics = getDeviceQueue(vkd, caps, queueMapping.graphics);

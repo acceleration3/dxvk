@@ -104,8 +104,22 @@ namespace dxvk::vk {
   DeviceFn::DeviceFn(const Rc<InstanceLoader>& library, bool owned, VkDevice device)
   : DeviceLoader(library, owned, device) { }
   DeviceFn::~DeviceFn() {
-    if (m_owned)
-      this->vkDestroyDevice(m_device, nullptr);
+    if (!m_owned)
+      return;
+
+    if (m_teardownOrder)
+      m_teardownOrder->destroying(m_teardownOrder->self);
+
+    this->vkDestroyDevice(m_device, nullptr);
+
+    if (m_teardownOrder)
+      m_teardownOrder->destroyed(m_teardownOrder->self);
+  }
+
+
+  void DeviceFn::orderTeardown(VkDriverId driver) {
+    const TeardownOrder* order = g_teardownOrder;
+    m_teardownOrder = order && order->neededBy(order->self, uint32_t(driver)) ? order : nullptr;
   }
   
 }

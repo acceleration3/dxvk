@@ -33,6 +33,10 @@ extern "C" {
     dxvk::g_vramGate = gate;
   }
 
+  DLLEXPORT void dxvk_proton_set_teardown_order(const dxvk::vk::TeardownOrder* order) {
+    dxvk::vk::g_teardownOrder = order && order->size >= sizeof(dxvk::vk::TeardownOrder) ? order : nullptr;
+  }
+
   DLLEXPORT IDirect3D9* __stdcall Direct3DCreate9(UINT nSDKVersion) {
     IDirect3D9Ex* pDirect3D = nullptr;
     dxvk::CreateD3D9(false, &pDirect3D, nullptr, 0);
