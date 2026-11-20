@@ -250,7 +250,19 @@ namespace dxvk {
 
           m_context->addStatCtr(DxvkStatCounter::CsChunkCount, 1);
 
-          entry.chunk->executeAll(m_context.ptr());
+          try {
+            if (!m_failed.load())
+              entry.chunk->executeAll(m_context.ptr());
+          } catch (const DxvkOutOfMemoryError& e) {
+            Logger::err("CS chunk dropped:");
+            Logger::err(e.message());
+            m_failed.store(true);
+            m_device->markOutOfMemory();
+          } catch (const DxvkError& e) {
+            Logger::err("CS chunk dropped:");
+            Logger::err(e.message());
+            m_failed.store(true);
+          }
 
           if (entry.seq) {
             // Use a separate mutex for the chunk counter, this will only

@@ -569,6 +569,10 @@ namespace dxvk {
       return m_seqOrdered.load();
     }
 
+    bool failed() const {
+      return m_failed.load();
+    }
+
   private:
 
     Rc<DxvkDevice>              m_device;
@@ -581,6 +585,7 @@ namespace dxvk {
     std::atomic<uint64_t>       m_seqOrdered  = { 0u };
 
     std::atomic<bool>           m_stopped     = { false };
+    std::atomic<bool>           m_failed      = { false };
     std::atomic<bool>           m_hasHighPrio = { false };
 
     alignas(CACHE_LINE_SIZE)

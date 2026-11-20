@@ -95,6 +95,9 @@ namespace dxvk {
 
     SynchronizeCsThread(DxvkCsThread::SynchronizeAll);
 
+    if (m_csThread.failed())
+      throw DxvkError("D3D9DeviceEx: Device initialization failed");
+
     if (!(BehaviorFlags & D3DCREATE_FPU_PRESERVE))
       SetupFPU();
 
