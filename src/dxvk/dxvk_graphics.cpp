@@ -621,9 +621,16 @@ namespace dxvk {
     }
 
     // Set up line rasterization mode as requested by the application.
-    if (state.rs.lineMode() != VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT && isLineRendering(shaders, state)) {
+    VkLineRasterizationModeEXT lineMode = state.rs.lineMode();
+
+    if (lineMode == VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT
+     && state.rs.sampleCount() <= VK_SAMPLE_COUNT_1_BIT
+     && device->features().extLineRasterization.bresenhamLines)
+      lineMode = VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT;
+
+    if (lineMode != VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT && isLineRendering(shaders, state)) {
       rsLineInfo.pNext = std::exchange(rsInfo.pNext, &rsLineInfo);
-      rsLineInfo.lineRasterizationMode = state.rs.lineMode();
+      rsLineInfo.lineRasterizationMode = lineMode;
 
       if (rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT)
         rsInfo.lineWidth = 1.4f;
