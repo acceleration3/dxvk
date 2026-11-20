@@ -96,6 +96,11 @@ namespace dxvk {
     auto icbSlice = pShader->GetIcb();
     auto srcSlice = AllocStagingBuffer(icbSlice.length());
 
+    if (unlikely(!srcSlice.defined() && icbSlice.length())) {
+      m_device->markDeviceLost();
+      return;
+    }
+
     std::memcpy(srcSlice.mapPtr(0), pIcbData, IcbSize);
 
     if (IcbSize < icbSlice.length())
@@ -120,6 +125,12 @@ namespace dxvk {
 
     if (pInitialData != nullptr && pInitialData->pSysMem != nullptr) {
       auto stagingSlice = AllocStagingBuffer(buffer->info().size);
+
+      if (unlikely(!stagingSlice.defined() && buffer->info().size)) {
+        m_device->markDeviceLost();
+        return;
+      }
+
       auto stagingSize = stagingSlice.length();
 
       std::memcpy(stagingSlice.mapPtr(0), pInitialData->pSysMem, stagingSlice.length());
@@ -179,6 +190,11 @@ namespace dxvk {
         }
 
         stagingSlice = AllocStagingBuffer(dataSize);
+
+        if (unlikely(!stagingSlice.defined() && dataSize)) {
+          m_device->markDeviceLost();
+          return;
+        }
       }
 
       // Copy initial data for each subresource into the staging buffer,

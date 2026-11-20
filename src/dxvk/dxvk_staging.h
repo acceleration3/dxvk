@@ -52,7 +52,8 @@ namespace dxvk {
      * Tries to suballocate from existing buffer,
      * or creates a new buffer if necessary.
      * \param [in] size Number of bytes to allocate
-     * \returns Allocated slice
+     * \returns Allocated slice, which is not
+     *    defined when the device is out of memory
      */
     DxvkBufferSlice alloc(VkDeviceSize size);
 
@@ -73,6 +74,9 @@ namespace dxvk {
     }
 
   private:
+
+    Rc<DxvkBuffer> tryCreateBuffer(
+      const DxvkBufferCreateInfo& info);
 
     Rc<DxvkDevice>  m_device = nullptr;
     Rc<DxvkBuffer>  m_buffer = nullptr;

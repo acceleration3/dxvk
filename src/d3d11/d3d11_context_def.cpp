@@ -342,6 +342,9 @@ namespace dxvk {
     } else {
       auto dataSlice = AllocStagingBuffer(layout.Size);
 
+      if (unlikely(!dataSlice.defined()))
+        return E_OUTOFMEMORY;
+
       pMappedResource->RowPitch   = layout.RowPitch;
       pMappedResource->DepthPitch = layout.DepthPitch;
       pMappedResource->pData      = dataSlice.mapPtr(0);

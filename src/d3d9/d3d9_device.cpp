@@ -881,6 +881,10 @@ namespace dxvk {
 
       return D3D_OK;
     }
+    catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return D3DERR_OUTOFVIDEOMEMORY;
+    }
     catch (const DxvkError & e) {
       Logger::err(e.message());
       return D3DERR_INVALIDCALL;
@@ -932,6 +936,10 @@ namespace dxvk {
         m_losableResourceCounter++;
 
       return D3D_OK;
+    }
+    catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return D3DERR_OUTOFVIDEOMEMORY;
     }
     catch (const DxvkError & e) {
       Logger::err(e.message());
@@ -2745,6 +2753,10 @@ namespace dxvk {
 
       return D3D_OK;
     }
+    catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return D3DERR_OUTOFVIDEOMEMORY;
+    }
     catch (const DxvkError & e) {
       Logger::err(e.message());
       return D3DERR_INVALIDCALL;
@@ -3065,8 +3077,9 @@ namespace dxvk {
     int32_t baseVertexIndex = 0;
     uint32_t vertexCount    = GetVertexCount(PrimitiveType, PrimitiveCount);
 
-    UploadPerDrawData(StartVertex, vertexCount, firstIndex, 0,
-      baseVertexIndex, &dynamicSysmemVBOs, nullptr);
+    if (unlikely(!UploadPerDrawData(StartVertex, vertexCount, firstIndex, 0,
+        baseVertexIndex, &dynamicSysmemVBOs, nullptr)))
+      return D3DERR_OUTOFVIDEOMEMORY;
 
     PrepareDraw(PrimitiveType, !dynamicSysmemVBOs, false);
 
@@ -3116,8 +3129,9 @@ namespace dxvk {
 
     uint32_t indexCount = GetVertexCount(PrimitiveType, PrimitiveCount);
 
-    UploadPerDrawData(MinVertexIndex, NumVertices, StartIndex, indexCount,
-      BaseVertexIndex, &dynamicSysmemVBOs, &dynamicSysmemIBO);
+    if (unlikely(!UploadPerDrawData(MinVertexIndex, NumVertices, StartIndex, indexCount,
+        BaseVertexIndex, &dynamicSysmemVBOs, &dynamicSysmemIBO)))
+      return D3DERR_OUTOFVIDEOMEMORY;
 
     PrepareDraw(PrimitiveType, !dynamicSysmemVBOs, !dynamicSysmemIBO);
 
@@ -3183,6 +3197,10 @@ namespace dxvk {
     const uint32_t bufferSize = GetUPBufferSize(vertexCount, VertexStreamZeroStride);
 
     auto upSlice = AllocUPBuffer(bufferSize);
+
+    if (unlikely(!upSlice.mapPtr))
+      return D3DERR_OUTOFVIDEOMEMORY;
+
     FillUPVertexBuffer(upSlice.mapPtr, pVertexStreamZeroData, dataSize, bufferSize);
 
     EmitCs([this,
@@ -3242,6 +3260,10 @@ namespace dxvk {
     const uint32_t upSize = vertexBufferSize + indicesSize;
 
     auto upSlice = AllocUPBuffer(upSize);
+
+    if (unlikely(!upSlice.mapPtr))
+      return D3DERR_OUTOFVIDEOMEMORY;
+
     uint8_t* data = reinterpret_cast<uint8_t*>(upSlice.mapPtr);
     FillUPVertexBuffer(data, pVertexStreamZeroData, vertexDataSize, vertexBufferSize);
     std::memcpy(data + vertexBufferSize, pIndexData, indicesSize);
@@ -3318,7 +3340,7 @@ namespace dxvk {
     bool dynamicSysmemVBOs;
     uint32_t firstIndex     = 0;
     int32_t baseVertexIndex = 0;
-    UploadPerDrawData(
+    if (unlikely(!UploadPerDrawData(
       SrcStartIndex,
       VertexCount,
       firstIndex,
@@ -3326,7 +3348,8 @@ namespace dxvk {
       baseVertexIndex,
       &dynamicSysmemVBOs,
       nullptr
-    );
+    )))
+      return D3DERR_OUTOFVIDEOMEMORY;
 
     PrepareDraw(D3DPT_FORCE_DWORD, !dynamicSysmemVBOs, false);
 
@@ -4573,6 +4596,10 @@ namespace dxvk {
       *ppSwapChain = ref(swapchain);
       m_losableResourceCounter++;
     }
+    catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return D3DERR_OUTOFVIDEOMEMORY;
+    }
     catch (const DxvkError & e) {
       Logger::err(e.message());
       return D3DERR_NOTAVAILABLE;
@@ -4809,7 +4836,15 @@ namespace dxvk {
       info.stages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
       info.debugName = "UP buffer";
 
-      Rc<DxvkBuffer> buffer = m_dxvkDevice->createBuffer(info, memoryFlags);
+      Rc<DxvkBuffer> buffer;
+
+      try {
+        buffer = m_dxvkDevice->createBuffer(info, memoryFlags);
+      } catch (const DxvkOutOfMemoryError& e) {
+        Logger::err(e.message());
+        return D3D9BufferSlice();
+      }
+
       void* mapPtr = buffer->mapPtr(0);
 
       if (size <= UPBufferSize) {
@@ -4828,6 +4863,9 @@ namespace dxvk {
 
     if (unlikely(m_upBufferOffset + alignedSize > UPBufferSize)) {
       auto slice = m_upBuffer->allocateStorage();
+
+      if (unlikely(!slice))
+        return D3D9BufferSlice();
 
       m_upBufferOffset = 0;
       m_upBufferMapPtr = slice->mapPtr();
@@ -4852,7 +4890,7 @@ namespace dxvk {
   D3D9BufferSlice D3D9DeviceEx::AllocStagingBuffer(VkDeviceSize size) {
     D3D9BufferSlice result;
     result.slice = m_stagingBuffer.alloc(size);
-    result.mapPtr = result.slice.mapPtr(0);
+    result.mapPtr = result.slice.defined() ? result.slice.mapPtr(0) : nullptr;
     return result;
   }
 
@@ -5355,6 +5393,12 @@ namespace dxvk {
       const void* mapPtr = MapTexture(pSrcTexture, SrcSubresource);
       VkDeviceSize dirtySize = extentBlockCount.width * extentBlockCount.height * extentBlockCount.depth * formatInfo->elementSize;
       D3D9BufferSlice slice = AllocStagingBuffer(dirtySize);
+
+      if (unlikely(!slice.mapPtr)) {
+        m_dxvkDevice->markDeviceLost();
+        return;
+      }
+
       const void* srcData = reinterpret_cast<const uint8_t*>(mapPtr) + copySrcOffset;
       util::packImageData(
         slice.mapPtr, srcData, extentBlockCount, formatInfo->elementSize,
@@ -5406,6 +5450,12 @@ namespace dxvk {
 
       // the converter can not handle the 4 aligned pitch so we always repack into a staging buffer
       D3D9BufferSlice slice = AllocStagingBuffer(pSrcTexture->GetSubresourceSize(SrcSubresource));
+
+      if (unlikely(!slice.mapPtr)) {
+        m_dxvkDevice->markDeviceLost();
+        return;
+      }
+
       VkDeviceSize pitch = align(srcBlockCount.width * formatElementSize, 4);
 
       const DxvkFormatInfo* convertedFormatInfo = lookupFormatInfo(convertFormat.Format);
@@ -5534,6 +5584,10 @@ namespace dxvk {
       // only way to invalidate a buffer is by mapping it.
       Rc<DxvkBuffer> mappingBuffer = pResource->GetBuffer<D3D9_COMMON_BUFFER_TYPE_MAPPING>();
       auto bufferSlice = pResource->DiscardMapSlice();
+
+      if (unlikely(!bufferSlice))
+        return D3DERR_OUTOFVIDEOMEMORY;
+
       data = reinterpret_cast<uint8_t*>(bufferSlice->mapPtr());
 
       EmitCs([
@@ -5604,6 +5658,12 @@ namespace dxvk {
     D3D9Range& range = pResource->DirtyRange();
 
     D3D9BufferSlice slice = AllocStagingBuffer(range.max - range.min);
+
+    if (unlikely(!slice.mapPtr)) {
+      m_dxvkDevice->markDeviceLost();
+      return D3DERR_OUTOFVIDEOMEMORY;
+    }
+
     void* srcData = reinterpret_cast<uint8_t*>(srcSlice->mapPtr()) + range.min;
     memcpy(slice.mapPtr, srcData, range.max - range.min);
 
@@ -5659,7 +5719,7 @@ namespace dxvk {
   }
 
 
-  void D3D9DeviceEx::UploadPerDrawData(
+  bool D3D9DeviceEx::UploadPerDrawData(
           UINT&                   FirstVertexIndex,
           UINT                    NumVertices,
           UINT&                   FirstIndex,
@@ -5680,7 +5740,7 @@ namespace dxvk {
       *pDynamicIBO = dynamicSysmemIBO;
 
     if (likely(!dynamicSysmemVBOs && !dynamicSysmemIBO))
-      return;
+      return true;
 
     uint32_t vertexBuffersToUpload;
     if (likely(dynamicSysmemVBOs))
@@ -5777,10 +5837,13 @@ namespace dxvk {
       if (pDynamicIBO)
         *pDynamicIBO = false;
 
-      return;
+      return true;
     }
 
     auto upSlice = AllocUPBuffer(totalUpBufferSize);
+
+    if (unlikely(!upSlice.mapPtr))
+      return false;
 
     // Now copy the actual data and bind it.
     if (dynamicSysmemVBOs) {
@@ -5855,6 +5918,8 @@ namespace dxvk {
       // Change the draw call parameters to reflect the changed index buffer
       FirstIndex = 0;
     }
+
+    return true;
   }
 
 
@@ -6043,6 +6108,10 @@ namespace dxvk {
       staticSize = align(staticSize, buffer.GetAlignment());
 
       auto staticData = buffer.Alloc(staticSize);
+
+      if (unlikely(!staticData))
+        return;
+
       auto staticOffset = 0u;
 
       if (!dynamicSize) {
@@ -6085,7 +6154,12 @@ namespace dxvk {
       auto& buffer = GetConstantBuffer(CbvIndex::VSDynamicConstants);
       dynamicSize = align(dynamicSize, buffer.GetAlignment());
 
-      copyArgs.floatBuffer = buffer.Alloc(dynamicSize);
+      void* dynamicData = buffer.Alloc(dynamicSize);
+
+      if (unlikely(!dynamicData))
+        return;
+
+      copyArgs.floatBuffer = dynamicData;
       copyArgs.floatBufferSize = dynamicSize;
       copyArgs.constFloatApi = m_state.vsConsts->fConsts;
 

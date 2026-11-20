@@ -33,8 +33,8 @@ namespace dxvk {
     m_allocationCounter += alignedSize;
 
     if (2 * alignedSize > m_size) {
-      return DxvkBufferSlice(m_device->createBuffer(info,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+      Rc<DxvkBuffer> large = tryCreateBuffer(info);
+      return large != nullptr ? DxvkBufferSlice(std::move(large)) : DxvkBufferSlice();
     }
 
     if (m_offset + alignedSize > m_size || m_buffer == nullptr) {
@@ -43,14 +43,28 @@ namespace dxvk {
       // Free resources first if possible, in some rare
       // situations this may help avoid a memory allocation.
       m_buffer = nullptr;
-      m_buffer = m_device->createBuffer(info,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+      m_buffer = tryCreateBuffer(info);
       m_offset = 0;
+
+      if (m_buffer == nullptr)
+        return DxvkBufferSlice();
     }
 
     DxvkBufferSlice slice(m_buffer, m_offset, size);
     m_offset += alignedSize;
     return slice;
+  }
+
+
+  Rc<DxvkBuffer> DxvkStagingBuffer::tryCreateBuffer(
+    const DxvkBufferCreateInfo& info) {
+    try {
+      return m_device->createBuffer(info,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return nullptr;
+    }
   }
 
 

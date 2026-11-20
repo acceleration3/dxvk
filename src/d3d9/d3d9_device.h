@@ -905,7 +905,7 @@ namespace dxvk {
      * @param FirstIndex The first index
      * @param NumIndices The number of indices that will be drawn. If this is 0, the index buffer binding will not be modified.
      */
-    void UploadPerDrawData(
+    bool UploadPerDrawData(
             UINT&                   FirstVertexIndex,
             UINT                    NumVertices,
             UINT&                   FirstIndex,

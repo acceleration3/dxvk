@@ -29,13 +29,27 @@ namespace dxvk {
 
 
   void* D3D9ConstantBuffer::Alloc(VkDeviceSize size) {
-    if (unlikely(!m_cpuBuffer))
-      m_cpuSlice = CreateBuffer();
+    if (unlikely(!m_cpuBuffer)) {
+      try {
+        m_cpuSlice = CreateBuffer();
+      } catch (const DxvkOutOfMemoryError& e) {
+        Logger::err(e.message());
+        m_device->GetDXVKDevice()->markDeviceLost();
+        return nullptr;
+      }
+    }
 
     size = align(size, m_align);
 
     if (m_offset + size > m_size) {
-      m_cpuSlice = m_cpuBuffer->allocateStorage();
+      auto storage = m_cpuBuffer->allocateStorage();
+
+      if (unlikely(!storage)) {
+        m_device->GetDXVKDevice()->markDeviceLost();
+        return nullptr;
+      }
+
+      m_cpuSlice = std::move(storage);
 
       m_device->EmitCs([
         cBinding    = uint32_t(m_kind),
@@ -86,6 +100,9 @@ namespace dxvk {
     if (m_usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
       bufferInfo.access |= VK_ACCESS_SHADER_READ_BIT;
 
+    Rc<DxvkBuffer> cpuBuffer;
+    Rc<DxvkBuffer> gpuBuffer;
+
     if (m_useDma) {
       // Create the CPU buffer as a pure staging buffer
       auto cpuInfo = bufferInfo;
@@ -93,7 +110,7 @@ namespace dxvk {
       cpuInfo.stages = VK_PIPELINE_STAGE_TRANSFER_BIT;
       cpuInfo.access = VK_ACCESS_TRANSFER_READ_BIT;
 
-      m_cpuBuffer = dxvkDevice->createBuffer(cpuInfo, m_memType);
+      cpuBuffer = dxvkDevice->createBuffer(cpuInfo, m_memType);
 
       // Create the GPU buffer as the actual uniform buffer
       auto gpuInfo = bufferInfo;
@@ -101,12 +118,15 @@ namespace dxvk {
       gpuInfo.stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
       gpuInfo.access |= VK_ACCESS_TRANSFER_WRITE_BIT;
 
-      m_gpuBuffer = dxvkDevice->createBuffer(gpuInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      gpuBuffer = dxvkDevice->createBuffer(gpuInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     } else {
       // Create a single buffer for both CPU writes and GPU reads
-      m_cpuBuffer = dxvkDevice->createBuffer(bufferInfo, m_memType);
-      m_gpuBuffer = m_cpuBuffer;
+      cpuBuffer = dxvkDevice->createBuffer(bufferInfo, m_memType);
+      gpuBuffer = cpuBuffer;
     }
+
+    m_cpuBuffer = std::move(cpuBuffer);
+    m_gpuBuffer = std::move(gpuBuffer);
 
     m_device->EmitCs([
       cBinding  = uint32_t(m_kind),
