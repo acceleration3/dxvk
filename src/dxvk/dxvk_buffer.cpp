@@ -31,7 +31,14 @@ namespace dxvk {
     m_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     // Create and assign actual buffer resource
-    assignStorage(allocateStorage());
+    Rc<DxvkResourceAllocation> storage = allocateStorage();
+
+    if (unlikely(!storage)) {
+      m_allocator->unregisterResource(this);
+      throw DxvkOutOfMemoryError("DxvkBuffer: out of memory");
+    }
+
+    assignStorage(std::move(storage));
   }
 
 

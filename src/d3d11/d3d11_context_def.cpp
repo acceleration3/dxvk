@@ -282,6 +282,12 @@ namespace dxvk {
     }
 
     auto bufferSlice = pBuffer->AllocSlice(&m_allocationCache);
+
+    if (unlikely(!bufferSlice)) {
+      pMappedResource->pData = nullptr;
+      return E_OUTOFMEMORY;
+    }
+
     pMappedResource->pData        = bufferSlice->mapPtr();
     pMappedResource->RowPitch     = pBuffer->Desc()->ByteWidth;
     pMappedResource->DepthPitch   = pBuffer->Desc()->ByteWidth;

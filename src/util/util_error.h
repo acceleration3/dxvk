@@ -27,5 +27,15 @@ namespace dxvk {
     std::string m_message;
     
   };
-  
+
+
+  class DxvkOutOfMemoryError : public DxvkError {
+
+  public:
+
+    DxvkOutOfMemoryError(std::string&& message)
+    : DxvkError(std::move(message)) { }
+
+  };
+
 }
