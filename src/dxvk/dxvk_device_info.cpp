@@ -51,6 +51,7 @@ namespace dxvk {
     HANDLE_EXT(khrExternalSemaphoreWin32);         \
     HANDLE_EXT(khrExternalMemoryFd);               \
     HANDLE_EXT(extExternalMemoryDmaBuf);           \
+    HANDLE_EXT(extExternalMemoryHost);             \
     HANDLE_EXT(khrExternalSemaphoreFd);            \
     HANDLE_EXT(khrIncrementalPresent);             \
     HANDLE_EXT(khrLoadStoreOpNone);                \
@@ -1068,6 +1069,11 @@ namespace dxvk {
       /* Memory an embedder exports as a dma-buf (accel-virt's scanout) */
       ENABLE_EXT(khrExternalMemoryFd, false),
       ENABLE_EXT(extExternalMemoryDmaBuf, false),
+
+      /* Memory an embedder imports by host pointer for this device's GPU to
+       * read in place: guest memory, which an Intel GPU reads coherently
+       * only imported this way (accel-virt's buffers on slices) */
+      ENABLE_EXT(extExternalMemoryHost, false),
 
       /* A timeline an embedder imports to order this device's work after
        * another's on the same GPU (accel-virt's Direct3D 12 swapchains) */
