@@ -64,7 +64,18 @@ namespace dxvk {
       if (features.extLineRasterization.smoothLines)
         m_state.setLineMode(VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT);
     }
+
+    // Target-independent rasterization is emulated at one sample, the
+    // coverage computed in the pixel shader of every pixel the triangle
+    // touches (D3D11TirShaders).
+    m_tirState = m_state;
+    m_tirState.setSampleCount(0u);
+    m_tirState.setConservativeMode(features.extConservativeRasterization
+      ? VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT
+      : VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
   }
+
+
   
   
   D3D11RasterizerState::~D3D11RasterizerState() {

@@ -176,10 +176,44 @@ namespace dxvk {
       return m_interfaces.EncodeInstanceData(Slot, pClassInstance);
     }
 
+    /**
+     * \brief Converter of the shader's DXBC
+     *
+     * Converts the shader again for variants of it.
+     * \returns Shader converter
+     */
+    Rc<DxvkIrShaderConverter> GetConverter() const {
+      return m_converter;
+    }
+
+    /**
+     * \brief Number of input registers
+     *
+     * One past the highest input register the input signature
+     * names, i.e. the first input location the shader leaves free.
+     * \returns Input register count
+     */
+    uint32_t GetInputRegisterCount() const {
+      return m_inputRegisterCount;
+    }
+
+    /**
+     * \brief Whether the shader reads clip or cull distances
+     * \returns \c true if SV_ClipDistance or SV_CullDistance is an input
+     */
+    bool ReadsClipDistances() const {
+      return m_readsClipDistances;
+    }
+
   private:
 
     Rc<DxvkShader> m_shader;
     Rc<DxvkBuffer> m_buffer;
+
+    Rc<DxvkIrShaderConverter> m_converter;
+
+    uint32_t            m_inputRegisterCount = 0u;
+    bool                m_readsClipDistances = false;
 
     D3D11BindingMask    m_bindings = { };
     D3D11InterfaceInfo  m_interfaces = { };
@@ -194,6 +228,10 @@ namespace dxvk {
 
     void GatherInterefaceInfo(
             D3D11ClassLinkage*      pLinkage,
+      const void*                   pShaderBytecode,
+            size_t                  BytecodeLength);
+
+    void GatherInputInfo(
       const void*                   pShaderBytecode,
             size_t                  BytecodeLength);
 

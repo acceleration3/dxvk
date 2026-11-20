@@ -379,6 +379,33 @@ namespace dxvk {
   };
 
   /**
+   * \brief Emulated target-independent rasterization
+   *
+   * Whether the bound state needs looking at again, and whether
+   * the emulation's shaders and rasterizer state are bound.
+   */
+  struct D3D11TirBinding {
+    bool dirty  = true;
+    bool active = false;
+  };
+
+
+  /**
+   * \brief What an emulated TIR draw binds
+   *
+   * The geometry shader handing the pixel shader its triangle, the
+   * pixel shader computing the coverage, the rasterizer state at one
+   * sample, and viewport 0 as the geometry shader's push data.
+   */
+  struct D3D11TirDraw {
+    Rc<DxvkShader>          gs;
+    Rc<DxvkShader>          ps;
+    DxvkRasterizerState     rs = { };
+    std::array<float, 4u>   viewport = { };
+  };
+
+
+  /**
    * \brief Maximum used binding numbers in a shader stage
    */
   struct D3D11MaxUsedStageBindings {

@@ -3285,6 +3285,9 @@ namespace dxvk {
 
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::ApplyDirtyGraphicsBindings() {
+    if (unlikely(m_tir.dirty))
+      ApplyTargetIndependentRasterization();
+
     auto dirtyMask = m_state.lazy.shadersDirty & m_state.lazy.shadersUsed;
     dirtyMask.clr(D3D11ShaderType::eCompute);
 
@@ -3355,6 +3358,7 @@ namespace dxvk {
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::ApplyPrimitiveTopology() {
     D3D11_PRIMITIVE_TOPOLOGY topology = m_state.ia.primitiveTopology;
+    m_tir.dirty = true;
     DxvkInputAssemblyState iaState(VK_PRIMITIVE_TOPOLOGY_MAX_ENUM, false);
 
     if (topology <= D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ) {
@@ -3462,6 +3466,8 @@ namespace dxvk {
   
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::ApplyRasterizerState() {
+    m_tir.dirty = true;
+
     if (m_state.rs.state != nullptr) {
       EmitCs([
         cState      = m_state.rs.state->GetState(),
@@ -3484,14 +3490,17 @@ namespace dxvk {
     D3D11SpecData specData = {};
     specData.sampleCount = m_state.om.sampleCount;
 
-    if (unlikely(!specData.sampleCount)) {
-      specData.sampleCount = m_state.rs.state
-        ? m_state.rs.state->Desc().ForcedSampleCount
-        : 0u;
+    // The rasterizer runs at a forced sample count whatever
+    // the render targets are, and sampleinfo reports it.
+    UINT forcedSampleCount = m_state.rs.state
+      ? m_state.rs.state->Desc().ForcedSampleCount
+      : 0u;
 
-      if (!specData.sampleCount)
-        specData.sampleCount = 1u;
-    }
+    if (forcedSampleCount)
+      specData.sampleCount = forcedSampleCount;
+
+    if (unlikely(!specData.sampleCount))
+      specData.sampleCount = 1u;
 
     EmitCs([
       cSpecData = specData
@@ -3505,6 +3514,7 @@ namespace dxvk {
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::ApplyViewportState() {
     uint32_t viewportCount = m_state.rs.numViewports;
+    m_tir.dirty = true;
 
     if (likely(viewportCount)) {
       EmitCsCmd<DxvkViewport>(D3D11CmdType::None, viewportCount,
@@ -3552,6 +3562,107 @@ namespace dxvk {
         ctx->setViewports(1, &viewport);
       });
     }
+  }
+
+
+  template<typename ContextType>
+  void D3D11CommonContext<ContextType>::ApplyTargetIndependentRasterization() {
+    m_tir.dirty = false;
+
+    D3D11TirDraw draw = DetermineTargetIndependentRasterization();
+
+    if (draw.gs != nullptr) {
+      if (unlikely(draw.gs->needsCompile()))
+        m_device->requestCompileShader(draw.gs);
+
+      if (unlikely(draw.ps->needsCompile()))
+        m_device->requestCompileShader(draw.ps);
+
+      EmitCs([
+        cDraw = std::move(draw)
+      ] (DxvkContext* ctx) mutable {
+        ctx->bindShader<VK_SHADER_STAGE_GEOMETRY_BIT>(Forwarder::move(cDraw.gs));
+        ctx->bindShader<VK_SHADER_STAGE_FRAGMENT_BIT>(Forwarder::move(cDraw.ps));
+        ctx->setRasterizerState(cDraw.rs);
+        ctx->pushData(VK_SHADER_STAGE_GEOMETRY_BIT, 0u, sizeof(cDraw.viewport), &cDraw.viewport);
+      });
+
+      m_tir.active = true;
+      return;
+    }
+
+    if (m_tir.active) {
+      m_tir.active = false;
+
+      BindShader<D3D11ShaderType::eGeometry>(GetCommonShader(m_state.gs.ptr()));
+      BindShader<D3D11ShaderType::ePixel>(GetCommonShader(m_state.ps.ptr()));
+      ApplyRasterizerState();
+
+      m_tir.dirty = false;
+    }
+  }
+
+
+  template<typename ContextType>
+  D3D11TirDraw D3D11CommonContext<ContextType>::DetermineTargetIndependentRasterization() {
+    D3D11TirDraw draw = { };
+
+    auto rs = m_state.rs.state.ptr();
+
+    if (likely(!rs || rs->Desc().ForcedSampleCount <= 1u))
+      return draw;
+
+    UINT sampleCount = rs->Desc().ForcedSampleCount;
+    auto& tirShaders = m_parent->GetTirShaders();
+
+    // What the emulation covers: filled triangles, from the vertex or
+    // domain shader straight to the pixel shader, with render targets or
+    // without. Anything else is drawn at one sample with render targets,
+    // at the forced count the device supports without.
+    D3D11_PRIMITIVE_TOPOLOGY topology = m_state.ia.primitiveTopology;
+
+    bool triangles = topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+                  || topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+
+    if (m_state.ds != nullptr) {
+      triangles = m_state.ds->GetCommonShader()->GetShader()->metadata().outputTopology
+        == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+
+    bool eligible = tirShaders.IsSupported() && triangles
+      && rs->Desc().FillMode == D3D11_FILL_SOLID
+      && m_state.vs != nullptr && m_state.ps != nullptr && m_state.gs == nullptr
+      && m_state.rs.numViewports;
+
+    D3D11TirGeometryShader gs = { };
+
+    if (eligible) {
+      auto prevStage = m_state.ds != nullptr
+        ? m_state.ds->GetCommonShader()->GetShader()
+        : m_state.vs->GetCommonShader()->GetShader();
+
+      auto ps = m_state.ps->GetCommonShader();
+
+      gs = tirShaders.GetGeometryShader(prevStage,
+        ps->GetInputRegisterCount(), ps->ReadsClipDistances());
+
+      if (gs.shader != nullptr) {
+        draw.gs = gs.shader;
+        draw.ps = tirShaders.GetPixelShader(ps, sampleCount, gs.layout);
+        draw.rs = rs->GetTirState();
+
+        const auto& vp = m_state.rs.viewports[0u];
+        draw.viewport = {{ vp.TopLeftX, vp.TopLeftY, vp.Width, vp.Height }};
+        return draw;
+      }
+    }
+
+    static std::atomic<bool> s_warned = { false };
+
+    if (!s_warned.exchange(true))
+      Logger::warn(str::format("D3D11: Target-independent rasterization at ", sampleCount, " samples not emulated for this draw"));
+
+    return draw;
   }
 
 
@@ -3610,6 +3721,9 @@ namespace dxvk {
   void D3D11CommonContext<ContextType>::BindShader(
     const D3D11CommonShader*    pShaderModule) {
     uint64_t oldUavMask = m_state.lazy.bindingsUsed[ShaderStage].uavMask;
+
+    if (ShaderStage != D3D11ShaderType::eCompute)
+      m_tir.dirty = true;
 
     if (pShaderModule) {
       auto buffer = pShaderModule->GetIcb();
@@ -3708,6 +3822,8 @@ namespace dxvk {
 
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::BindFramebuffer() {
+    m_tir.dirty = true;
+
     DxvkDepthBiasRepresentation depthBiasRepresentation =
       { VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORMAT_EXT,
         m_device->features().extDepthBiasControl.depthBiasExact };
@@ -4853,7 +4969,7 @@ namespace dxvk {
 
   template<typename ContextType>
   bool D3D11CommonContext<ContextType>::HasDirtyGraphicsBindings() {
-    return (m_state.lazy.shadersDirty & m_state.lazy.shadersUsed).any(
+    return m_tir.dirty || (m_state.lazy.shadersDirty & m_state.lazy.shadersUsed).any(
       D3D11ShaderType::eVertex, D3D11ShaderType::eGeometry,
       D3D11ShaderType::eHull,   D3D11ShaderType::eDomain,
       D3D11ShaderType::ePixel);
@@ -4862,6 +4978,9 @@ namespace dxvk {
 
   template<typename ContextType>
   void D3D11CommonContext<ContextType>::ResetCommandListState() {
+    m_tir.dirty = true;
+    m_tir.active = false;
+
     EmitCs([
       cUsedBindings  = GetMaxUsedBindings()
     ] (DxvkContext* ctx) {
