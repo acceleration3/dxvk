@@ -51,6 +51,7 @@ namespace dxvk {
     HANDLE_EXT(khrExternalSemaphoreWin32);         \
     HANDLE_EXT(khrExternalMemoryFd);               \
     HANDLE_EXT(extExternalMemoryDmaBuf);           \
+    HANDLE_EXT(khrExternalSemaphoreFd);            \
     HANDLE_EXT(khrIncrementalPresent);             \
     HANDLE_EXT(khrLoadStoreOpNone);                \
     HANDLE_EXT(khrMaintenance5);                   \
@@ -1067,6 +1068,10 @@ namespace dxvk {
       /* Memory an embedder exports as a dma-buf (accel-virt's scanout) */
       ENABLE_EXT(khrExternalMemoryFd, false),
       ENABLE_EXT(extExternalMemoryDmaBuf, false),
+
+      /* A timeline an embedder imports to order this device's work after
+       * another's on the same GPU (accel-virt's Direct3D 12 swapchains) */
+      ENABLE_EXT(khrExternalSemaphoreFd, false),
 
       /* Dirty rects for presentation */
       ENABLE_EXT(khrIncrementalPresent, false),
