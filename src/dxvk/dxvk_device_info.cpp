@@ -53,6 +53,7 @@ namespace dxvk {
     HANDLE_EXT(extExternalMemoryDmaBuf);           \
     HANDLE_EXT(extExternalMemoryHost);             \
     HANDLE_EXT(khrExternalSemaphoreFd);            \
+    HANDLE_EXT(extImageDrmFormatModifier);         \
     HANDLE_EXT(khrIncrementalPresent);             \
     HANDLE_EXT(khrLoadStoreOpNone);                \
     HANDLE_EXT(khrMaintenance5);                   \
@@ -1078,6 +1079,11 @@ namespace dxvk {
       /* A timeline an embedder imports to order this device's work after
        * another's on the same GPU (accel-virt's Direct3D 12 swapchains) */
       ENABLE_EXT(khrExternalSemaphoreFd, false),
+
+      /* An image an embedder makes exportable as a dma-buf, laid out linear:
+       * a driver may offer dma-buf export only under an explicit modifier
+       * (accel-virt's shared textures, RADV from Mesa 26.2) */
+      ENABLE_EXT(extImageDrmFormatModifier, false),
 
       /* Dirty rects for presentation */
       ENABLE_EXT(khrIncrementalPresent, false),

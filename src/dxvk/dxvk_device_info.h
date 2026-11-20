@@ -97,6 +97,7 @@ namespace dxvk {
     VkBool32                                                  extExternalMemoryDmaBuf         = VK_FALSE;
     VkBool32                                                  extExternalMemoryHost           = VK_FALSE;
     VkBool32                                                  khrExternalSemaphoreFd          = VK_FALSE;
+    VkBool32                                                  extImageDrmFormatModifier       = VK_FALSE;
     VkBool32                                                  khrIncrementalPresent           = VK_FALSE;
     VkBool32                                                  khrLoadStoreOpNone              = VK_FALSE;
     VkPhysicalDeviceMaintenance5FeaturesKHR                   khrMaintenance5                 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR };
@@ -181,6 +182,7 @@ namespace dxvk {
     VkExtensionProperties extExternalMemoryDmaBuf           = vk::makeExtension(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
     VkExtensionProperties extExternalMemoryHost             = vk::makeExtension(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
     VkExtensionProperties khrExternalSemaphoreFd            = vk::makeExtension(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME);
+    VkExtensionProperties extImageDrmFormatModifier         = vk::makeExtension(VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME);
     VkExtensionProperties khrIncrementalPresent             = vk::makeExtension(VK_KHR_INCREMENTAL_PRESENT_EXTENSION_NAME);
     VkExtensionProperties khrLoadStoreOpNone                = vk::makeExtension(VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME);
     VkExtensionProperties khrMaintenance5                   = vk::makeExtension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
