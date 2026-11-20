@@ -48,10 +48,14 @@ namespace dxvk::hud {
 
     auto key = m_renderer.getPipelineKey(dstView);
 
-    m_renderer.beginFrame(ctx, dstView, m_options);
-    m_hudItems.render(ctx, key, m_options, m_renderer);
-    m_renderer.flushDraws(ctx, dstView, m_options);
-    m_renderer.endFrame(ctx);
+    try {
+      m_renderer.beginFrame(ctx, dstView, m_options);
+      m_hudItems.render(ctx, key, m_options, m_renderer);
+      m_renderer.flushDraws(ctx, dstView, m_options);
+      m_renderer.endFrame(ctx);
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+    }
   }
 
 

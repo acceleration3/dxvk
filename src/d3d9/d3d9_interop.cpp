@@ -317,9 +317,14 @@ namespace dxvk {
     if (unlikely(!buffer || buffer->GetMapMode() != D3D9_COMMON_BUFFER_MAP_MODE_DIRECT))
       return D3DERR_INVALIDCALL;
 
+    auto allocation = buffer->DiscardMapSlice();
+
+    if (unlikely(!allocation))
+      return D3DERR_OUTOFVIDEOMEMORY;
+
     m_device->EmitCs([
       cBuffer     = buffer->GetBuffer<D3D9_COMMON_BUFFER_TYPE_MAPPING>(),
-      cAllocation = buffer->DiscardMapSlice()
+      cAllocation = std::move(allocation)
     ] (DxvkContext* ctx) mutable {
       ctx->invalidateBuffer(cBuffer, std::move(cAllocation));
     });

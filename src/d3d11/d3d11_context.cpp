@@ -3061,6 +3061,12 @@ namespace dxvk {
     VkDeviceSize bufferSize = pDestTileRegionSize->NumTiles * SparseMemoryPageSize;
 
     DxvkBufferSlice slice = AllocStagingBuffer(bufferSize);
+
+    if (unlikely(!slice.defined())) {
+      m_device->markDeviceLost();
+      return;
+    }
+
     std::memcpy(slice.mapPtr(0), pSourceTileData, bufferSize);
 
     // Fix up flags. The runtime probably validates this in some
@@ -5720,6 +5726,12 @@ namespace dxvk {
     } else {
       // Write directly to a staging buffer and dispatch a copy
       DxvkBufferSlice stagingSlice = AllocStagingBuffer(Length);
+
+      if (unlikely(!stagingSlice.defined())) {
+        m_device->markDeviceLost();
+        return;
+      }
+
       std::memcpy(stagingSlice.mapPtr(0), pSrcData, Length);
 
       EmitCs([
@@ -5784,6 +5796,11 @@ namespace dxvk {
       return;
 
     auto stagingSlice = AllocStagingBuffer(util::computeImageDataSize(packedFormat, extent));
+
+    if (unlikely(!stagingSlice.defined())) {
+      m_device->markDeviceLost();
+      return;
+    }
 
     util::packImageData(stagingSlice.mapPtr(0),
       pSrcData, SrcRowPitch, SrcDepthPitch, 0, 0,
