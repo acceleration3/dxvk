@@ -1446,7 +1446,8 @@ namespace dxvk {
             VkDeviceSize          bufferOffset,
             VkDeviceSize          bufferRowAlignment,
             VkDeviceSize          bufferSliceAlignment,
-            VkFormat              bufferFormat);
+            VkFormat              bufferFormat,
+            bool                  predicated = false);
 
     void copyImageToBufferHw(
       const Rc<DxvkBuffer>&       buffer,
@@ -1467,20 +1468,23 @@ namespace dxvk {
       const Rc<DxvkImage>&        image,
             VkImageSubresourceLayers imageSubresource,
             VkOffset3D            imageOffset,
-            VkExtent3D            imageExtent);
+            VkExtent3D            imageExtent,
+            bool                  predicated = false);
 
     void clearImageViewFb(
       const Rc<DxvkImageView>&    imageView,
             VkOffset3D            offset,
             VkExtent3D            extent,
             VkImageAspectFlags    aspect,
-            VkClearValue          value);
+            VkClearValue          value,
+            bool                  predicated = false);
     
     void clearImageViewCs(
       const Rc<DxvkImageView>&    imageView,
             VkOffset3D            offset,
             VkExtent3D            extent,
-            VkClearValue          value);
+            VkClearValue          value,
+            bool                  predicated = false);
     
     void copyImageHw(
       const Rc<DxvkImage>&        dstImage,
@@ -1491,14 +1495,15 @@ namespace dxvk {
             VkOffset3D            srcOffset,
             VkExtent3D            extent);
     
-    void copyImageFb(
+    bool copyImageFb(
       const Rc<DxvkImage>&        dstImage,
             VkImageSubresourceLayers dstSubresource,
             VkOffset3D            dstOffset,
       const Rc<DxvkImage>&        srcImage,
             VkImageSubresourceLayers srcSubresource,
             VkOffset3D            srcOffset,
-            VkExtent3D            extent);
+            VkExtent3D            extent,
+            bool                  predicated = false);
 
     bool copyImageClear(
       const Rc<DxvkImage>&        dstImage,
@@ -1598,7 +1603,8 @@ namespace dxvk {
       const VkImageResolve&           region,
             VkFormat                  format,
             VkResolveModeFlagBits     depthMode,
-            VkResolveModeFlagBits     stencilMode);
+            VkResolveModeFlagBits     stencilMode,
+            bool                      predicated = false);
 
     bool resolveImageClear(
       const Rc<DxvkImage>&            dstImage,
@@ -1728,13 +1734,15 @@ namespace dxvk {
     void endPredicate();
 
     struct PredicateScope {
-      PredicateScope(DxvkContext* ctx) : m_ctx(ctx) { m_ctx->beginPredicate(); }
-      ~PredicateScope() { m_ctx->endPredicate(); }
+      PredicateScope(DxvkContext* ctx, bool enable = true)
+      : m_ctx(ctx), m_enable(enable) { if (m_enable) m_ctx->beginPredicate(); }
+      ~PredicateScope() { if (m_enable) m_ctx->endPredicate(); }
 
-      void suspend() { m_ctx->endPredicate(); }
-      void resume() { m_ctx->beginPredicate(); }
+      void suspend() { if (m_enable) m_ctx->endPredicate(); }
+      void resume() { if (m_enable) m_ctx->beginPredicate(); }
 
       DxvkContext* m_ctx;
+      bool         m_enable;
     };
 
     template<VkPipelineBindPoint BindPoint>

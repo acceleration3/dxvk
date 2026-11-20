@@ -175,6 +175,15 @@ namespace dxvk {
   }
 
   
+  static bool canPredicateImageToBufferCopy(VkFormat format) {
+    auto formatInfo = lookupFormatInfo(format);
+
+    return !(formatInfo->flags.test(DxvkFormatFlag::BlockCompressed)
+          || formatInfo->flags.test(DxvkFormatFlag::MultiPlane))
+        && (formatInfo->aspectMask == VK_IMAGE_ASPECT_COLOR_BIT);
+  }
+
+
   void DxvkContext::beginPredicate() {
     if (!m_predicateEnabled || m_predicateActive)
       return;
@@ -406,8 +415,11 @@ namespace dxvk {
     DxvkResourceAccess access(*bufferView, offset, length,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
-    DxvkCmdBuffer cmdBuffer = prepareOutOfOrderTransfer(
-      DxvkCmdBuffer::InitBuffer, 1u, &access);
+    const bool predicated = m_predicateEnabled;
+
+    DxvkCmdBuffer cmdBuffer = predicated
+      ? DxvkCmdBuffer::ExecBuffer
+      : prepareOutOfOrderTransfer(DxvkCmdBuffer::InitBuffer, 1u, &access);
 
     if (cmdBuffer == DxvkCmdBuffer::ExecBuffer) {
       endCurrentPass(true);
@@ -451,8 +463,12 @@ namespace dxvk {
     m_cmd->bindResources(cmdBuffer, meta.layout,
       1u, &descriptor, sizeof(pushArgs), &pushArgs);
 
-    m_cmd->cmdDispatch(cmdBuffer,
-      workgroups.width, workgroups.height, workgroups.depth);
+    {
+      PredicateScope predicate(this, predicated);
+
+      m_cmd->cmdDispatch(cmdBuffer,
+        workgroups.width, workgroups.height, workgroups.depth);
+    }
 
     if (unlikely(m_features.test(DxvkContextFeature::DebugUtils)))
       m_cmd->cmdEndDebugUtilsLabel(cmdBuffer);
@@ -474,6 +490,22 @@ namespace dxvk {
     // directly, do that instead and ignore the image entirely.
     if (attachment.shadow && attachment.shadow->info().format) {
       clearBufferView(attachment.shadow, 0u, attachment.view->mipLevelExtent(0u).width, clearValue.color);
+      return;
+    }
+
+    // Predicated clears cannot be deferred into load ops, which conditional
+    // rendering does not affect, so they run as clears inside the render pass.
+    if (m_predicateEnabled && clearAspects && !attachment.shadow) {
+      this->clearImageViewFb(attachment.view, VkOffset3D { 0, 0, 0 },
+        attachment.view->mipLevelExtent(0u), clearAspects, clearValue, true);
+
+      if (attachment.view->isMultisampled()) {
+        auto subresources = attachment.view->imageSubresources();
+        subresources.aspectMask = clearAspects;
+
+        m_implicitResolves.invalidate(*attachment.view->image(), subresources);
+      }
+
       return;
     }
 
@@ -539,9 +571,9 @@ namespace dxvk {
     }
     
     if (viewUsage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))
-      this->clearImageViewFb(imageView, offset, extent, aspect, value);
+      this->clearImageViewFb(imageView, offset, extent, aspect, value, m_predicateEnabled);
     else if (viewUsage & VK_IMAGE_USAGE_STORAGE_BIT)
-      this->clearImageViewCs(imageView, offset, extent, value);
+      this->clearImageViewCs(imageView, offset, extent, value, m_predicateEnabled);
 
     if (imageView->isMultisampled()) {
       auto subresources = imageView->imageSubresources();
@@ -634,13 +666,15 @@ namespace dxvk {
           VkDeviceSize          rowAlignment,
           VkDeviceSize          sliceAlignment,
           VkFormat              srcFormat) {
-    bool useFb = !formatsAreBufferCopyCompatible(dstImage->info().format, srcFormat)
+    bool useFb = m_predicateEnabled
+              || !formatsAreBufferCopyCompatible(dstImage->info().format, srcFormat)
               || dstImage->info().sampleCount != VK_SAMPLE_COUNT_1_BIT;
+
 
     if (useFb) {
       copyBufferToImageFb(dstImage, dstSubresource, dstOffset, dstExtent,
         srcBuffer, srcOffset, rowAlignment, sliceAlignment,
-        srcFormat ? srcFormat : dstImage->info().format);
+        srcFormat ? srcFormat : dstImage->info().format, m_predicateEnabled);
     } else {
       copyBufferToImageHw(dstImage, dstSubresource, dstOffset, dstExtent,
         srcBuffer, srcOffset, rowAlignment, sliceAlignment);
@@ -656,6 +690,14 @@ namespace dxvk {
           VkImageSubresourceLayers srcSubresource,
           VkOffset3D            srcOffset,
           VkExtent3D            extent) {
+    if (m_predicateEnabled && this->copyImageFb(dstImage, dstSubresource, dstOffset,
+        srcImage, srcSubresource, srcOffset, extent, true)) {
+      if (dstImage->info().sampleCount > VK_SAMPLE_COUNT_1_BIT)
+        m_implicitResolves.invalidate(*dstImage, vk::makeSubresourceRange(dstSubresource));
+
+      return;
+    }
+
     if (this->copyImageClear(dstImage, dstSubresource, dstOffset, extent, srcImage, srcSubresource)
      || this->copyImageInline(*dstImage, dstSubresource, dstOffset, *srcImage, srcSubresource, srcOffset, extent))
       return;
@@ -765,10 +807,12 @@ namespace dxvk {
           VkExtent3D            srcExtent) {
     bool useFb = !formatsAreBufferCopyCompatible(srcImage->info().format, dstFormat);
 
-    if (useFb) {
+    const bool predicated = m_predicateEnabled && canPredicateImageToBufferCopy(srcImage->info().format);
+
+    if (useFb || predicated) {
       copyImageToBufferCs(dstBuffer, dstOffset, rowAlignment, sliceAlignment,
         dstFormat ? dstFormat : srcImage->info().format,
-        srcImage, srcSubresource, srcOffset, srcExtent);
+        srcImage, srcSubresource, srcOffset, srcExtent, predicated);
     } else {
       copyImageToBufferHw(dstBuffer, dstOffset, rowAlignment, sliceAlignment,
         srcImage, srcSubresource, srcOffset, srcExtent);
@@ -2022,8 +2066,9 @@ namespace dxvk {
     if (!mode && !stencilMode)
       return;
 
-    // Check whether the given resolve modes are supported for render pass resolves
-    bool useFb = false;
+    // Check whether the given resolve modes are supported for render pass resolves.
+    // Predicated resolves have to go through draws, which conditional rendering skips.
+    bool useFb = m_predicateEnabled;
 
     if (formatInfo->aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) {
       const auto& properties = m_device->properties().vk12;
@@ -2099,7 +2144,7 @@ namespace dxvk {
     } else if (unlikely(useFb)) {
       // Only used for weird resolve modes or partial resolves
       this->resolveImageFb(dstImage, srcImage,
-        region, format, mode, stencilMode);
+        region, format, mode, stencilMode, m_predicateEnabled);
     } else {
       // Default path, use a resolve attachment
       this->resolveImageRp(dstImage, srcImage,
@@ -3847,7 +3892,8 @@ namespace dxvk {
           VkDeviceSize          bufferOffset,
           VkDeviceSize          bufferRowAlignment,
           VkDeviceSize          bufferSliceAlignment,
-          VkFormat              bufferFormat) {
+          VkFormat              bufferFormat,
+          bool                  predicated) {
     this->endCurrentPass(true);
     this->invalidateState();
 
@@ -3946,7 +3992,7 @@ namespace dxvk {
 
     Rc<DxvkImageView> imageView = image->createView(imageViewInfo);
 
-    bool doDiscard = image->isFullSubresource(imageSubresource, imageExtent);
+    bool doDiscard = !predicated && image->isFullSubresource(imageSubresource, imageExtent);
 
     VkPipelineStageFlags dstStages = isDepthStencil
       ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
@@ -3955,6 +4001,9 @@ namespace dxvk {
     VkAccessFlags dstAccess = isDepthStencil
       ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
       : VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    if (predicated)
+      dstAccess |= isDepthStencil ? 0u : VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
     small_vector<DxvkResourceAccess, 2u> accessBatch;
     accessBatch.emplace_back(*bufferView, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
@@ -3993,6 +4042,11 @@ namespace dxvk {
       if (!(imageSubresource.aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT))
         attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     } else {
+      stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    }
+
+    if (predicated) {
+      attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
       stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     }
 
@@ -4062,6 +4116,8 @@ namespace dxvk {
       for (pushArgs.layerIndex = 0u; pushArgs.layerIndex < imageSubresource.layerCount; pushArgs.layerIndex++) {
         m_cmd->bindResources(DxvkCmdBuffer::ExecBuffer,
           meta.layout, 0, nullptr, sizeof(pushArgs), &pushArgs);
+
+        PredicateScope predicate(this, predicated);
         m_cmd->cmdDraw(3u, imageExtent.depth, 0u, 0u);
       }
     }
@@ -4069,6 +4125,18 @@ namespace dxvk {
     if (useBitwiseStencil && (dstAspects & VK_IMAGE_ASPECT_STENCIL_BIT)) {
       metaKey.dstAspects = VK_IMAGE_ASPECT_STENCIL_BIT;
       metaKey.bitwiseStencil = VK_TRUE;
+
+      if (predicated) {
+        VkClearAttachment clear = { };
+        clear.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+        VkClearRect clearRect = { };
+        clearRect.rect = scissor;
+        clearRect.layerCount = renderingInfo.layerCount;
+
+        PredicateScope predicate(this);
+        m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &clear, 1, &clearRect);
+      }
 
       DxvkMetaBufferToImageCopy meta = m_common->metaCopy().getPipeline(metaKey);
 
@@ -4084,6 +4152,8 @@ namespace dxvk {
             meta.layout, 0, nullptr, sizeof(pushArgs), &pushArgs);
 
           m_cmd->cmdSetStencilWriteMask(VK_STENCIL_FACE_FRONT_AND_BACK, pushArgs.stencilBit);
+
+          PredicateScope predicate(this, predicated);
           m_cmd->cmdDraw(3u, imageExtent.depth, 0u, 0u);
         }
       }
@@ -4149,7 +4219,8 @@ namespace dxvk {
     const Rc<DxvkImage>&        image,
           VkImageSubresourceLayers imageSubresource,
           VkOffset3D            imageOffset,
-          VkExtent3D            imageExtent) {
+          VkExtent3D            imageExtent,
+          bool                  predicated) {
     this->endCurrentPass(true);
     this->invalidateState();
 
@@ -4273,10 +4344,14 @@ namespace dxvk {
       meta.layout, descriptors.size(), descriptors.data(),
       sizeof(pushArgs), &pushArgs);
 
-    m_cmd->cmdDispatch(DxvkCmdBuffer::ExecBuffer,
-      workgroupCount.width,
-      workgroupCount.height,
-      workgroupCount.depth);
+    {
+      PredicateScope predicate(this, predicated);
+
+      m_cmd->cmdDispatch(DxvkCmdBuffer::ExecBuffer,
+        workgroupCount.width,
+        workgroupCount.height,
+        workgroupCount.depth);
+    }
 
     m_flags.set(DxvkContextFlag::ForceWriteAfterWriteSync);
 
@@ -4290,7 +4365,8 @@ namespace dxvk {
           VkOffset3D            offset,
           VkExtent3D            extent,
           VkImageAspectFlags    aspect,
-          VkClearValue          value) {
+          VkClearValue          value,
+          bool                  predicated) {
     // Ensure that the clear region is actually within the bounds of the given view
     VkExtent3D mipExtent = imageView->mipLevelExtent(0);
 
@@ -4305,7 +4381,7 @@ namespace dxvk {
 
     // Use regular render target clear path if we're clearing the
     // entire view to hit some additional optimizations.
-    if (extent == imageView->mipLevelExtent(0u)) {
+    if (!predicated && extent == imageView->mipLevelExtent(0u)) {
       DxvkAttachment attachment = {};
       attachment.view = imageView;
 
@@ -4401,10 +4477,36 @@ namespace dxvk {
         renderingInfo.pColorAttachments = &attachmentInfo;
       }
 
+      if (predicated) {
+        attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        stencilInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+        clearAccess |= (imageView->info().aspects & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT))
+          ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+          : VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+      }
+
       DxvkResourceAccess access(*imageView, clearStages, clearAccess, false);
       syncResources(DxvkCmdBuffer::ExecBuffer, 1u, &access);
 
       m_cmd->cmdBeginRendering(DxvkCmdBuffer::ExecBuffer, &renderingInfo);
+
+      if (predicated) {
+        VkClearAttachment clear = { };
+        clear.aspectMask = aspect;
+        clear.colorAttachment = 0u;
+        clear.clearValue = value;
+
+        VkClearRect clearRect = { };
+        clearRect.rect = renderingInfo.renderArea;
+        clearRect.layerCount = renderingInfo.layerCount;
+
+        PredicateScope predicate(this);
+        m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &clear, 1, &clearRect);
+      }
+
       m_cmd->cmdEndRendering(DxvkCmdBuffer::ExecBuffer);
 
       if (unlikely(m_features.test(DxvkContextFeature::DebugUtils)))
@@ -4430,7 +4532,7 @@ namespace dxvk {
       // Check whether we can fold the clear into the curret render pass. This is the
       // case when the framebuffer size matches the clear size, even if the clear itself
       // does not cover the entire view, and if the view has not been accessed yet.
-      bool hoistClear = m_flags.test(DxvkContextFlag::GpRenderPassSecondaryCmd)
+      bool hoistClear = !predicated && m_flags.test(DxvkContextFlag::GpRenderPassSecondaryCmd)
         && extent.width == fbSize.width && extent.height == fbSize.height;
 
       DxvkDeferredClear clearInfo = { };
@@ -4472,6 +4574,7 @@ namespace dxvk {
       clear.colorAttachment = colorIndex;
       clear.clearValue = value;
 
+      PredicateScope predicate(this, predicated);
       m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &clear, 1, &clearRect);
     }
   }
@@ -4481,11 +4584,14 @@ namespace dxvk {
     const Rc<DxvkImageView>&    imageView,
           VkOffset3D            offset,
           VkExtent3D            extent,
-          VkClearValue          value) {
+          VkClearValue          value,
+          bool                  predicated) {
     DxvkResourceAccess access(*imageView, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
-      imageView->image()->isFullSubresource(vk::pickSubresourceLayers(imageView->imageSubresources(), 0u), extent));
+      !predicated && imageView->image()->isFullSubresource(vk::pickSubresourceLayers(imageView->imageSubresources(), 0u), extent));
 
-    DxvkCmdBuffer cmdBuffer = prepareOutOfOrderTransfer(DxvkCmdBuffer::InitBuffer, 1u, &access);
+    DxvkCmdBuffer cmdBuffer = predicated
+      ? DxvkCmdBuffer::ExecBuffer
+      : prepareOutOfOrderTransfer(DxvkCmdBuffer::InitBuffer, 1u, &access);
 
     if (cmdBuffer == DxvkCmdBuffer::ExecBuffer) {
       endCurrentPass(true);
@@ -4531,8 +4637,12 @@ namespace dxvk {
     m_cmd->bindResources(cmdBuffer, meta.layout,
       1u, &imageDescriptor, sizeof(pushArgs), &pushArgs);
 
-    m_cmd->cmdDispatch(cmdBuffer,
-      workgroups.width, workgroups.height, workgroups.depth);
+    {
+      PredicateScope predicate(this, predicated);
+
+      m_cmd->cmdDispatch(cmdBuffer,
+        workgroups.width, workgroups.height, workgroups.depth);
+    }
 
     if (cmdBuffer == DxvkCmdBuffer::ExecBuffer)
       m_flags.set(DxvkContextFlag::ForceWriteAfterWriteSync);
@@ -4641,14 +4751,15 @@ namespace dxvk {
   }
 
   
-  void DxvkContext::copyImageFb(
+  bool DxvkContext::copyImageFb(
     const Rc<DxvkImage>&        dstImage,
           VkImageSubresourceLayers dstSubresource,
           VkOffset3D            dstOffset,
     const Rc<DxvkImage>&        srcImage,
           VkImageSubresourceLayers srcSubresource,
           VkOffset3D            srcOffset,
-          VkExtent3D            extent) {
+          VkExtent3D            extent,
+          bool                  predicated) {
     this->endCurrentPass(true);
     this->invalidateState();
 
@@ -4693,7 +4804,7 @@ namespace dxvk {
       Logger::err(str::format("DxvkContext: copyImageFb: Unsupported images:"
         "\n  dst format: ", dstImage->info().format,
         "\n  src format: ", srcImage->info().format));
-      return;
+      return false;
     }
 
     if (unlikely(m_features.test(DxvkContextFeature::DebugUtils))) {
@@ -4717,7 +4828,7 @@ namespace dxvk {
 
     VkImageLayout dstLayout = views.dstView->getLayout();
 
-    bool doDiscard = dstImage->isFullSubresource(dstSubresource, extent);
+    bool doDiscard = !predicated && dstImage->isFullSubresource(dstSubresource, extent);
 
     // This function can process both color and depth-stencil images, so
     // some things change a lot depending on the destination image type
@@ -4799,6 +4910,11 @@ namespace dxvk {
       stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     }
 
+    if (predicated) {
+      attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    }
+
     VkRenderingInfo renderingInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
     renderingInfo.renderArea = scissor;
     renderingInfo.layerCount = dstSubresource.layerCount;
@@ -4848,6 +4964,7 @@ namespace dxvk {
       for (pushArgs.layerIndex = 0u; pushArgs.layerIndex < dstSubresource.layerCount; pushArgs.layerIndex++) {
         m_cmd->bindResources(DxvkCmdBuffer::ExecBuffer,
           meta.layout, 0, nullptr, sizeof(pushArgs), &pushArgs);
+        PredicateScope predicate(this, predicated);
         m_cmd->cmdDraw(3u, extent.depth, 0u, 0u);
       }
     }
@@ -4855,6 +4972,18 @@ namespace dxvk {
     if (useBitwiseStencil) {
       metaKey.dstAspects = VK_IMAGE_ASPECT_STENCIL_BIT;
       metaKey.bitwiseStencil = VK_TRUE;
+
+      if (predicated) {
+        VkClearAttachment clear = { };
+        clear.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+        VkClearRect clearRect = { };
+        clearRect.rect = scissor;
+        clearRect.layerCount = renderingInfo.layerCount;
+
+        PredicateScope predicate(this);
+        m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &clear, 1, &clearRect);
+      }
 
       DxvkMetaImageCopy meta = m_common->metaCopy().getPipeline(metaKey);
 
@@ -4870,6 +4999,8 @@ namespace dxvk {
             meta.layout, 0, nullptr, sizeof(pushArgs), &pushArgs);
 
           m_cmd->cmdSetStencilWriteMask(VK_STENCIL_FACE_FRONT_AND_BACK, pushArgs.stencilBit);
+
+          PredicateScope predicate(this, predicated);
           m_cmd->cmdDraw(3u, extent.depth, 0u, 0u);
         }
       }
@@ -4879,6 +5010,8 @@ namespace dxvk {
 
     if (unlikely(m_features.test(DxvkContextFeature::DebugUtils)))
       m_cmd->cmdEndDebugUtilsLabel(DxvkCmdBuffer::ExecBuffer);
+
+    return true;
   }
 
 
@@ -5792,7 +5925,8 @@ namespace dxvk {
     const VkImageResolve&           region,
           VkFormat                  format,
           VkResolveModeFlagBits     depthMode,
-          VkResolveModeFlagBits     stencilMode) {
+          VkResolveModeFlagBits     stencilMode,
+          bool                      predicated) {
     this->invalidateState();
 
     auto dstSubresourceRange = vk::makeSubresourceRange(region.dstSubresource);
@@ -5822,7 +5956,7 @@ namespace dxvk {
     VkImageLayout dstLayout = views.dstView->getLayout();
     VkImageLayout srcLayout = views.srcView->getLayout();
 
-    bool doDiscard = dstImage->isFullSubresource(region.dstSubresource, region.extent);
+    bool doDiscard = !predicated && dstImage->isFullSubresource(region.dstSubresource, region.extent);
 
     if (region.dstSubresource.aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT)
       doDiscard &= depthMode != VK_RESOLVE_MODE_NONE;
@@ -5933,6 +6067,13 @@ namespace dxvk {
       }
     }
 
+    if (predicated) {
+      attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      stencilInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      stencilInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    }
+
     // Create a pipeline for the resolve op. If stencil discard is used,
     // we will need to create a separate pipeline for that.
     DxvkMetaResolve::Key metaKey = { };
@@ -5970,6 +6111,7 @@ namespace dxvk {
         m_cmd->bindResources(DxvkCmdBuffer::ExecBuffer,
           meta.layout, 0u, nullptr, sizeof(pushArgs), &pushArgs);
 
+        PredicateScope predicate(this, predicated);
         m_cmd->cmdDraw(3u, 1u, 0u, 0u);
       }
     }
@@ -5980,6 +6122,18 @@ namespace dxvk {
       metaKey.mode = VK_RESOLVE_MODE_NONE;
       metaKey.modeStencil = stencilMode;
       metaKey.bitwiseStencil = VK_TRUE;
+
+      if (predicated) {
+        VkClearAttachment clear = { };
+        clear.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+        VkClearRect clearRect = { };
+        clearRect.rect = scissor;
+        clearRect.layerCount = renderingInfo.layerCount;
+
+        PredicateScope predicate(this);
+        m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &clear, 1, &clearRect);
+      }
 
       DxvkMetaResolve meta = m_common->metaResolve().getPipeline(metaKey);
 
@@ -5997,6 +6151,8 @@ namespace dxvk {
             meta.layout, 0u, nullptr, sizeof(pushArgs), &pushArgs);
 
           m_cmd->cmdSetStencilWriteMask(VK_STENCIL_FACE_FRONT_AND_BACK, pushArgs.stencilBit);
+
+          PredicateScope predicate(this, predicated);
           m_cmd->cmdDraw(3u, 1u, 0u, 0u);
         }
       }
