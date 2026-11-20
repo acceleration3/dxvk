@@ -397,6 +397,8 @@ namespace dxvk {
 
       case D3D9Format::SSAA: return {}; // Driver hack, handled elsewhere
 
+      case D3D9Format::RESZ: return {}; // Driver hack, handled elsewhere
+
       case D3D9Format::INTZ: return {
         VK_FORMAT_D24_UNORM_S8_UINT,
         VK_FORMAT_UNDEFINED,
