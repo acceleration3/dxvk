@@ -138,6 +138,11 @@ namespace dxvk {
       return m_allocation;
     }
 
+    inline Rc<DxvkResourceAllocation> ImportMapSlice(const DxvkBufferImportInfo& importInfo) {
+      m_allocation = GetMapBuffer()->importStorage(importInfo);
+      return m_allocation;
+    }
+
     inline Rc<DxvkResourceAllocation> GetMappedSlice() const {
       return m_allocation;
     }
