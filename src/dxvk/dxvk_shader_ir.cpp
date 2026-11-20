@@ -630,6 +630,9 @@ namespace dxvk {
           break;
       }
 
+      if (builtIn == dxbc_spv::ir::BuiltIn::eSampleId)
+        m_metadata.flags.set(DxvkShaderFlag::HasSampleRateShading);
+
       return ++op;
     }
 
