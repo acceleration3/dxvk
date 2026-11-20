@@ -114,14 +114,17 @@ namespace dxvk::vk {
 
     this->vkDestroyDevice(m_device, nullptr);
 
-    if (m_lifecycleGate)
+    if (m_lifecycleGate) {
+      m_lifecycleGates->returnDevice(m_lifecycleGate, m_lifecycleSlots);
       m_lifecycleGates->leave(m_lifecycleGate);
+    }
   }
 
 
-  void DeviceFn::gateLifecycle(const LifecycleGates* gates, void* gate) {
+  void DeviceFn::gateLifecycle(const LifecycleGates* gates, void* gate, uint32_t slots) {
     m_lifecycleGates = gates;
     m_lifecycleGate = gate;
+    m_lifecycleSlots = slots;
   }
   
 }

@@ -338,6 +338,14 @@ namespace dxvk {
       return nullptr;
     }
 
+    uint32_t lifecycleSlots = 0u;
+
+    if (lifecycleGate && !lifecycleGates->admitDevice(lifecycleGate, m_handle, &deviceInfo, &lifecycleSlots)) {
+      lifecycleGates->leave(lifecycleGate);
+      Logger::err("Failed to create Vulkan device: the driver has no room left for its queues in this process");
+      return nullptr;
+    }
+
     VkDevice device = VK_NULL_HANDLE;
     VkResult vr = vk->vkCreateDevice(m_handle, &deviceInfo, nullptr, &device);
 
@@ -348,8 +356,12 @@ namespace dxvk {
       vr = vk->vkCreateDevice(m_handle, &deviceInfo, nullptr, &device);
     }
 
-    if (lifecycleGate)
+    if (lifecycleGate) {
+      if (vr)
+        lifecycleGates->returnDevice(lifecycleGate, lifecycleSlots);
+
       lifecycleGates->leave(lifecycleGate);
+    }
 
     if (vr) {
       Logger::err(str::format("Failed to create Vulkan device: ", vr,
@@ -358,7 +370,7 @@ namespace dxvk {
     }
 
     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(vk, true, device);
-    vkd->gateLifecycle(lifecycleGates, lifecycleGate);
+    vkd->gateLifecycle(lifecycleGates, lifecycleGate, lifecycleSlots);
 
     DxvkDeviceQueueSet deviceQueues = { };
     deviceQueues.graphics = getDeviceQueue(vkd, caps, queueMapping.graphics);

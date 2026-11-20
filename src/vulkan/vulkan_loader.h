@@ -196,6 +196,8 @@ namespace dxvk::vk {
     void     (*leave)(void* gate);
     int      (*share)(void* gate);
     void     (*unshare)(void* gate);
+    int      (*admitDevice)(void* gate, VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* createInfo, uint32_t* slots);
+    void     (*returnDevice)(void* gate, uint32_t slots);
   };
 
   inline const LifecycleGates* g_lifecycleGates = nullptr;
@@ -204,10 +206,11 @@ namespace dxvk::vk {
     DeviceFn(const Rc<InstanceLoader>& library, bool owned, VkDevice device);
     ~DeviceFn();
 
-    void gateLifecycle(const LifecycleGates* gates, void* gate);
+    void gateLifecycle(const LifecycleGates* gates, void* gate, uint32_t slots);
 
     const LifecycleGates* m_lifecycleGates = nullptr;
     void*                 m_lifecycleGate  = nullptr;
+    uint32_t              m_lifecycleSlots = 0u;
     
     VULKAN_FN(vkDestroyDevice);
     VULKAN_FN(vkGetDeviceQueue);
