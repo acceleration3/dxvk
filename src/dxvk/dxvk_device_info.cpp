@@ -602,6 +602,11 @@ namespace dxvk {
       m_featuresSupported.extLineRasterization.smoothLines = VK_FALSE;
     }
 
+    std::string withheld = env::getEnvVar("AV_TEST_HOST_WITHOUT");
+
+    if (withheld.find("smoothLines") != std::string::npos)
+      m_featuresSupported.extLineRasterization.smoothLines = VK_FALSE;
+
     // Apply raw access chain option
     if (!instance.options().enableNvRawAccessChains)
       m_featuresSupported.nvRawAccessChains.shaderRawAccessChains = VK_FALSE;
