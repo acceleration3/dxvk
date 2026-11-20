@@ -821,10 +821,14 @@ namespace dxvk {
     determineBufferUsageFlagsPerMemoryType();
 
     updateMemoryHeapBudgets();
+
+    m_vramAccount.relieveBy(&DxvkMemoryAllocator::relieveEmbedder, this);
   }
   
   
   DxvkMemoryAllocator::~DxvkMemoryAllocator() {
+    m_vramAccount.relieveBy(nullptr, nullptr);
+
     auto vk = m_device->vkd();
 
     // Free all resources that are still queued up for relocation
@@ -1839,6 +1843,22 @@ namespace dxvk {
 
     if (freed)
       updateMemoryHeapStats(type.heap->index);
+  }
+
+
+  void DxvkMemoryAllocator::relieveEmbedder(void* holder) {
+    static_cast<DxvkMemoryAllocator*>(holder)->freeAllEmptyChunks();
+  }
+
+
+  void DxvkMemoryAllocator::freeAllEmptyChunks() {
+    std::unique_lock lock(m_mutex, std::try_to_lock);
+
+    if (!lock.owns_lock())
+      return;
+
+    for (uint32_t i = 0; i < m_memHeapCount; i++)
+      freeEmptyChunksInHeap(m_memHeaps[i], VkDeviceSize(-1), high_resolution_clock::time_point());
   }
 
 

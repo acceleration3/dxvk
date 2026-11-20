@@ -1510,6 +1510,9 @@ namespace dxvk {
             DxvkMemoryType&       type,
             VkDeviceSize          allocationSize,
             high_resolution_clock::time_point time);
+    static void relieveEmbedder(void* holder);
+
+    void freeAllEmptyChunks();
 
     void freeEmptyChunksInHeap(
       const DxvkMemoryHeap&       heap,

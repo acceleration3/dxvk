@@ -26,6 +26,7 @@ namespace dxvk {
     uint64_t (*cap)(void* account);
     int      (*takeHost)(void* account, uint64_t bytes);
     void     (*giveHost)(void* account, uint64_t bytes);
+    void     (*relieveBy)(void* self, void* account, void (*relieve)(void* holder), void* holder);
   };
 
   inline const DxvkVramGate* g_vramGate = nullptr;
@@ -82,6 +83,11 @@ namespace dxvk {
     void giveHost(VkDeviceSize bytes) const {
       if (m_account)
         m_gate->giveHost(m_account, bytes);
+    }
+
+    void relieveBy(void (*relieve)(void* holder), void* holder) const {
+      if (m_account)
+        m_gate->relieveBy(m_gate->self, m_account, relieve, holder);
     }
 
   private:
