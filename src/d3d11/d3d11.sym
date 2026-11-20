@@ -5,7 +5,7 @@
     D3D11CreateDeviceAndSwapChain;
     D3D11On12CreateDevice;
     dxvk_proton_set_vram_gate;
-    dxvk_proton_set_teardown_order;
+    dxvk_proton_set_lifecycle_gates;
     dxvk_take_out_of_memory;
 
   local:

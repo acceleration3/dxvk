@@ -224,8 +224,8 @@ extern "C" {
     }
 
 
-    DLLEXPORT void dxvk_proton_set_teardown_order(const dxvk::vk::TeardownOrder* order) {
-      dxvk::vk::g_teardownOrder = order && order->size >= sizeof(dxvk::vk::TeardownOrder) ? order : nullptr;
+    DLLEXPORT void dxvk_proton_set_lifecycle_gates(const dxvk::vk::LifecycleGates* gates) {
+      dxvk::vk::g_lifecycleGates = gates && gates->size >= sizeof(dxvk::vk::LifecycleGates) ? gates : nullptr;
     }
 
 

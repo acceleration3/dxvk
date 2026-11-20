@@ -107,19 +107,21 @@ namespace dxvk::vk {
     if (!m_owned)
       return;
 
-    if (m_teardownOrder)
-      m_teardownOrder->destroying(m_teardownOrder->self);
+    if (m_lifecycleGate && !m_lifecycleGates->enter(m_lifecycleGate)) {
+      Logger::err("Vulkan: device leaked instead of destroyed, the embedder's lifecycle gate stayed held");
+      return;
+    }
 
     this->vkDestroyDevice(m_device, nullptr);
 
-    if (m_teardownOrder)
-      m_teardownOrder->destroyed(m_teardownOrder->self);
+    if (m_lifecycleGate)
+      m_lifecycleGates->leave(m_lifecycleGate);
   }
 
 
-  void DeviceFn::orderTeardown(VkDriverId driver) {
-    const TeardownOrder* order = g_teardownOrder;
-    m_teardownOrder = order && order->neededBy(order->self, uint32_t(driver)) ? order : nullptr;
+  void DeviceFn::gateLifecycle(const LifecycleGates* gates, void* gate) {
+    m_lifecycleGates = gates;
+    m_lifecycleGate = gate;
   }
   
 }

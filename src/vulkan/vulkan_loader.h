@@ -188,25 +188,26 @@ namespace dxvk::vk {
    * Vulkan functions for a specific Vulkan device.
    * This ensures that no slow dispatch code is executed.
    */
-  struct TeardownOrder {
+  struct LifecycleGates {
     uint32_t size;
     void*    self;
-    int      (*neededBy)(void* self, uint32_t driverId);
-    void     (*compiling)(void* self);
-    void     (*compiled)(void* self);
-    void     (*destroying)(void* self);
-    void     (*destroyed)(void* self);
+    void*    (*gateOf)(void* self, const uint8_t* deviceUuid);
+    int      (*enter)(void* gate);
+    void     (*leave)(void* gate);
+    int      (*share)(void* gate);
+    void     (*unshare)(void* gate);
   };
 
-  inline const TeardownOrder* g_teardownOrder = nullptr;
+  inline const LifecycleGates* g_lifecycleGates = nullptr;
 
   struct DeviceFn : DeviceLoader {
     DeviceFn(const Rc<InstanceLoader>& library, bool owned, VkDevice device);
     ~DeviceFn();
 
-    void orderTeardown(VkDriverId driver);
+    void gateLifecycle(const LifecycleGates* gates, void* gate);
 
-    const TeardownOrder* m_teardownOrder = nullptr;
+    const LifecycleGates* m_lifecycleGates = nullptr;
+    void*                 m_lifecycleGate  = nullptr;
     
     VULKAN_FN(vkDestroyDevice);
     VULKAN_FN(vkGetDeviceQueue);

@@ -328,6 +328,16 @@ namespace dxvk {
       deviceInfo.ppEnabledExtensionNames = extensionNames.data();
     }
 
+    const vk::LifecycleGates* lifecycleGates = vk::g_lifecycleGates;
+    void* lifecycleGate = lifecycleGates
+      ? lifecycleGates->gateOf(lifecycleGates->self, m_capabilities.getProperties().vk11.deviceUUID)
+      : nullptr;
+
+    if (lifecycleGate && !lifecycleGates->enter(lifecycleGate)) {
+      Logger::err("Failed to create Vulkan device: the embedder's lifecycle gate stayed held");
+      return nullptr;
+    }
+
     VkDevice device = VK_NULL_HANDLE;
     VkResult vr = vk->vkCreateDevice(m_handle, &deviceInfo, nullptr, &device);
 
@@ -338,6 +348,9 @@ namespace dxvk {
       vr = vk->vkCreateDevice(m_handle, &deviceInfo, nullptr, &device);
     }
 
+    if (lifecycleGate)
+      lifecycleGates->leave(lifecycleGate);
+
     if (vr) {
       Logger::err(str::format("Failed to create Vulkan device: ", vr,
         safeMode ? "" : ", retrying 'safe mode'."));
@@ -345,7 +358,7 @@ namespace dxvk {
     }
 
     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(vk, true, device);
-    vkd->orderTeardown(m_capabilities.getProperties().vk12.driverID);
+    vkd->gateLifecycle(lifecycleGates, lifecycleGate);
 
     DxvkDeviceQueueSet deviceQueues = { };
     deviceQueues.graphics = getDeviceQueue(vkd, caps, queueMapping.graphics);
