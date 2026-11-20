@@ -49,6 +49,8 @@ namespace dxvk {
     HANDLE_EXT(khrDynamicRenderingLocalRead);      \
     HANDLE_EXT(khrExternalMemoryWin32);            \
     HANDLE_EXT(khrExternalSemaphoreWin32);         \
+    HANDLE_EXT(khrExternalMemoryFd);               \
+    HANDLE_EXT(extExternalMemoryDmaBuf);           \
     HANDLE_EXT(khrIncrementalPresent);             \
     HANDLE_EXT(khrLoadStoreOpNone);                \
     HANDLE_EXT(khrMaintenance5);                   \
@@ -1061,6 +1063,10 @@ namespace dxvk {
       /* External memory features for wine */
       ENABLE_EXT(khrExternalMemoryWin32, false),
       ENABLE_EXT(khrExternalSemaphoreWin32, false),
+
+      /* Memory an embedder exports as a dma-buf (accel-virt's scanout) */
+      ENABLE_EXT(khrExternalMemoryFd, false),
+      ENABLE_EXT(extExternalMemoryDmaBuf, false),
 
       /* Dirty rects for presentation */
       ENABLE_EXT(khrIncrementalPresent, false),
