@@ -1,0 +1,50 @@
+#version 460
+
+#extension GL_EXT_buffer_reference2 : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+layout(local_size_x = 1) in;
+
+layout(buffer_reference, buffer_reference_align = 8, scalar)
+readonly buffer src_t {
+  uvec2 values[];
+};
+
+layout(buffer_reference, buffer_reference_align = 4, scalar)
+buffer dst_t {
+  uint value;
+};
+
+layout(push_constant)
+uniform push_data_t {
+  src_t src;
+  dst_t dst;
+  uint count;
+  uint mode;
+} push_args;
+
+uvec2 add64(uvec2 a, uvec2 b) {
+  uint lo = a.x + b.x;
+  uint hi = a.y + b.y + (lo < a.x ? 1u : 0u);
+  return uvec2(lo, hi);
+}
+
+bool greater64(uvec2 a, uvec2 b) {
+  return a.y != b.y ? a.y > b.y : a.x > b.x;
+}
+
+void main() {
+  uvec2 first = uvec2(0u);
+  uvec2 second = uvec2(0u);
+
+  for (uint i = 0u; i < push_args.count; i++) {
+    first = add64(first, push_args.src.values[2u * i]);
+    second = add64(second, push_args.src.values[2u * i + 1u]);
+  }
+
+  bool result = push_args.mode == 0u
+    ? (first.x | first.y) != 0u
+    : greater64(second, first);
+
+  push_args.dst.value = result ? 1u : 0u;
+}

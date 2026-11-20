@@ -5,6 +5,7 @@ dxvk_shaders = files([
   'shaders/dxvk_dummy_frag.frag',
 
   'shaders/dxvk_mipgen.comp',
+  'shaders/dxvk_predicate_resolve.comp',
 
   'shaders/dxvk_present_frag.frag',
   'shaders/dxvk_present_frag_blit.frag',
@@ -59,6 +60,7 @@ dxvk_src = [
   'dxvk_meta_clear.cpp',
   'dxvk_meta_copy.cpp',
   'dxvk_meta_mipgen.cpp',
+  'dxvk_meta_predicate.cpp',
   'dxvk_meta_resolve.cpp',
   'dxvk_options.cpp',
   'dxvk_pipelayout.cpp',

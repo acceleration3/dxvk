@@ -58,6 +58,26 @@ namespace dxvk {
   }
 
 
+  bool DxvkQuery::getPredicateSources(
+          small_vector<std::pair<VkQueryPool, uint32_t>, 8>& handles,
+          small_vector<Rc<DxvkGpuQuery>, 8>& queries,
+          DxvkQueryData&      base) {
+    std::lock_guard lock(m_mutex);
+
+    if (!m_ended)
+      return false;
+
+    base = m_queryData;
+
+    for (const auto& q : m_queries) {
+      handles.push_back(q->getQuery());
+      queries.push_back(q);
+    }
+
+    return true;
+  }
+
+
   void DxvkQuery::begin() {
     std::lock_guard lock(m_mutex);
     m_queries.clear();

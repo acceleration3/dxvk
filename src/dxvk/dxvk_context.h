@@ -110,6 +110,21 @@ namespace dxvk {
      */
     void endQuery(
       const Rc<DxvkQuery>&      query);
+
+    /**
+     * \brief Sets the predicate that draws and dispatches obey
+     *
+     * The predicate is resolved on the GPU from the results of the
+     * query, which must have ended. Draws and dispatches are skipped
+     * when the query result matches the given value.
+     * \param [in] query Occlusion or stream output query, or null
+     * \param [in] value Query result that skips the work
+     * \param [in] overflow Resolve a stream output overflow
+     */
+    void setPredicate(
+      const Rc<DxvkQuery>&      query,
+            bool                value,
+            bool                overflow);
     
     /**
      * \brief Sets render targets
@@ -1330,6 +1345,13 @@ namespace dxvk {
     Rc<DxvkBuffer>          m_scratchBuffer;
     VkDeviceSize            m_scratchOffset = 0u;
 
+    Rc<DxvkBuffer>          m_predicateBuffer;
+    VkDeviceSize            m_predicateAlloc = 0u;
+    VkDeviceSize            m_predicateOffset = 0u;
+    bool                    m_predicateEnabled = false;
+    bool                    m_predicateInvert = false;
+    bool                    m_predicateActive = false;
+
     DxvkContextFlags        m_flags;
     DxvkContextState        m_state;
     DxvkContextFeatures     m_features;
@@ -1700,6 +1722,20 @@ namespace dxvk {
     void updateSpecConstants();
 
     void invalidateState();
+
+    void beginPredicate();
+
+    void endPredicate();
+
+    struct PredicateScope {
+      PredicateScope(DxvkContext* ctx) : m_ctx(ctx) { m_ctx->beginPredicate(); }
+      ~PredicateScope() { m_ctx->endPredicate(); }
+
+      void suspend() { m_ctx->endPredicate(); }
+      void resume() { m_ctx->beginPredicate(); }
+
+      DxvkContext* m_ctx;
+    };
 
     template<VkPipelineBindPoint BindPoint>
     void updateSamplerSet(const DxvkPipelineLayout* layout);

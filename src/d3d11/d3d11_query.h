@@ -87,6 +87,31 @@ namespace dxvk {
 
     static HRESULT ValidateDesc(const D3D11_QUERY_DESC1* pDesc);
 
+    bool IsPredicate() const {
+      return IsPredicateType(m_desc.Query);
+    }
+
+    bool IsOverflowPredicate() const {
+      return m_desc.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE
+          || m_desc.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0
+          || m_desc.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM1
+          || m_desc.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM2
+          || m_desc.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3;
+    }
+
+    Rc<DxvkQuery> GetPredicateSource() const {
+      return m_query[0];
+    }
+
+    static bool IsPredicateType(D3D11_QUERY type) {
+      return type == D3D11_QUERY_OCCLUSION_PREDICATE
+          || type == D3D11_QUERY_SO_OVERFLOW_PREDICATE
+          || type == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0
+          || type == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM1
+          || type == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM2
+          || type == D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3;
+    }
+
     static ID3D11Predicate* AsPredicate(ID3D11Query* pQuery) {
       // ID3D11Predicate and ID3D11Query have the same vtable. This
       // saves us some headache in all query-related functions.

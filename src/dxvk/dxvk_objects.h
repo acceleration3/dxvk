@@ -8,6 +8,7 @@
 #include "dxvk_meta_clear.h"
 #include "dxvk_meta_copy.h"
 #include "dxvk_meta_mipgen.h"
+#include "dxvk_meta_predicate.h"
 #include "dxvk_meta_resolve.h"
 #include "dxvk_pipemanager.h"
 #include "dxvk_renderpass.h"
@@ -70,6 +71,10 @@ namespace dxvk {
       return m_metaMipGen.get(m_device);
     }
 
+    DxvkMetaPredicateObjects& metaPredicate() {
+      return m_metaPredicate.get(m_device);
+    }
+
     DxvkMetaClearObjects& metaClear() {
       return m_metaClear.get(m_device);
     }
@@ -99,6 +104,7 @@ namespace dxvk {
 
     Lazy<DxvkMetaBlitObjects>     m_metaBlit;
     Lazy<DxvkMetaMipGenObjects>   m_metaMipGen;
+    Lazy<DxvkMetaPredicateObjects> m_metaPredicate;
     Lazy<DxvkMetaClearObjects>    m_metaClear;
     Lazy<DxvkMetaCopyObjects>     m_metaCopy;
     Lazy<DxvkMetaResolveObjects>  m_metaResolve;

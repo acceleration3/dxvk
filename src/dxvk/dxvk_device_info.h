@@ -63,6 +63,7 @@ namespace dxvk {
     VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT   extAttachmentFeedbackLoopLayout = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT };
     VkPhysicalDeviceBorderColorSwizzleFeaturesEXT             extBorderColorSwizzle           = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BORDER_COLOR_SWIZZLE_FEATURES_EXT };
     VkBool32                                                  extConservativeRasterization    = VK_FALSE;
+    VkPhysicalDeviceConditionalRenderingFeaturesEXT           extConditionalRendering         = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT };
     VkPhysicalDeviceCustomBorderColorFeaturesEXT              extCustomBorderColor            = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT };
     VkPhysicalDeviceDepthClipEnableFeaturesEXT                extDepthClipEnable              = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT };
     VkPhysicalDeviceDepthBiasControlFeaturesEXT               extDepthBiasControl             = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_BIAS_CONTROL_FEATURES_EXT };
@@ -147,6 +148,7 @@ namespace dxvk {
   struct DxvkDeviceExtensionInfo {
     VkExtensionProperties extAttachmentFeedbackLoopLayout   = vk::makeExtension(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME);
     VkExtensionProperties extBorderColorSwizzle             = vk::makeExtension(VK_EXT_BORDER_COLOR_SWIZZLE_EXTENSION_NAME);
+    VkExtensionProperties extConditionalRendering           = vk::makeExtension(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
     VkExtensionProperties extConservativeRasterization      = vk::makeExtension(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
     VkExtensionProperties extCustomBorderColor              = vk::makeExtension(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     VkExtensionProperties extDepthClipEnable                = vk::makeExtension(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);

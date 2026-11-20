@@ -783,6 +783,21 @@ namespace dxvk {
     }
 
 
+    void cmdBeginConditionalRendering(
+            DxvkCmdBuffer           cmdBuffer,
+      const VkConditionalRenderingBeginInfoEXT* info) {
+      m_cmd.execCommands |= cmdBuffer == DxvkCmdBuffer::ExecBuffer;
+      m_vkd->vkCmdBeginConditionalRenderingEXT(getCmdBuffer(cmdBuffer), info);
+    }
+
+
+    void cmdEndConditionalRendering(
+            DxvkCmdBuffer           cmdBuffer) {
+      m_cmd.execCommands |= cmdBuffer == DxvkCmdBuffer::ExecBuffer;
+      m_vkd->vkCmdEndConditionalRenderingEXT(getCmdBuffer(cmdBuffer));
+    }
+
+
     void cmdCopyQueryPoolResults(
             DxvkCmdBuffer           cmdBuffer,
             VkQueryPool             queryPool,

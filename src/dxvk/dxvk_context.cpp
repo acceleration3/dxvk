@@ -175,6 +175,143 @@ namespace dxvk {
   }
 
   
+  void DxvkContext::beginPredicate() {
+    if (!m_predicateEnabled || m_predicateActive)
+      return;
+
+    VkConditionalRenderingBeginInfoEXT info = { VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT };
+    info.buffer = m_predicateBuffer->getSliceInfo().buffer;
+    info.offset = m_predicateOffset;
+    info.flags  = m_predicateInvert ? VK_CONDITIONAL_RENDERING_INVERTED_BIT_EXT : 0u;
+
+    m_cmd->track(m_predicateBuffer, DxvkAccess::Read);
+    m_cmd->cmdBeginConditionalRendering(DxvkCmdBuffer::ExecBuffer, &info);
+    m_predicateActive = true;
+  }
+
+
+  void DxvkContext::endPredicate() {
+    if (!m_predicateActive)
+      return;
+
+    m_cmd->cmdEndConditionalRendering(DxvkCmdBuffer::ExecBuffer);
+    m_predicateActive = false;
+  }
+
+
+  void DxvkContext::setPredicate(
+    const Rc<DxvkQuery>&      query,
+          bool                value,
+          bool                overflow) {
+    m_predicateEnabled = false;
+
+    if (!query || !m_device->features().extConditionalRendering.conditionalRendering)
+      return;
+
+    small_vector<std::pair<VkQueryPool, uint32_t>, 8> handles;
+    small_vector<Rc<DxvkGpuQuery>, 8> sources;
+    DxvkQueryData base = { };
+
+    if (!query->getPredicateSources(handles, sources, base))
+      return;
+
+    for (auto& source : sources)
+      m_cmd->track(std::move(source));
+
+    constexpr VkDeviceSize BufferSize = 1u << 16;
+    constexpr VkDeviceSize EntrySize = 2u * sizeof(uint64_t);
+
+    // One entry for the data already accumulated, one per query slot,
+    // and a dword for the result, all kept 16-byte aligned
+    VkDeviceSize inputSize = (handles.size() + 1u) * EntrySize;
+    VkDeviceSize allocSize = inputSize + EntrySize;
+
+    if (unlikely(allocSize > BufferSize))
+      return;
+
+    if (!m_predicateBuffer || m_predicateAlloc + allocSize > BufferSize) {
+      DxvkBufferCreateInfo info = { };
+      info.size = BufferSize;
+      info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                 | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                 | VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
+      info.stages = VK_PIPELINE_STAGE_TRANSFER_BIT
+                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+                  | VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT;
+      info.access = VK_ACCESS_TRANSFER_WRITE_BIT
+                  | VK_ACCESS_SHADER_READ_BIT
+                  | VK_ACCESS_SHADER_WRITE_BIT
+                  | VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT;
+      info.debugName = "Predicate buffer";
+
+      Rc<DxvkBuffer> buffer = tryCreateBuffer(info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      if (unlikely(!buffer))
+        return;
+
+      m_predicateBuffer = std::move(buffer);
+      m_predicateAlloc = 0u;
+    }
+
+    this->endCurrentPass(true);
+    this->invalidateState();
+
+    DxvkResourceBufferInfo slice = m_predicateBuffer->getSliceInfo(m_predicateAlloc, allocSize);
+    m_predicateAlloc += allocSize;
+    m_cmd->track(m_predicateBuffer, DxvkAccess::Write);
+
+    m_cmd->cmdUpdateBuffer(DxvkCmdBuffer::ExecBuffer,
+      slice.buffer, slice.offset, EntrySize, &base);
+
+    for (size_t i = 0u; i < handles.size(); i++) {
+      m_cmd->cmdCopyQueryPoolResults(DxvkCmdBuffer::ExecBuffer,
+        handles[i].first, handles[i].second, 1u,
+        slice.buffer, slice.offset + (i + 1u) * EntrySize, EntrySize,
+        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    }
+
+    VkMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER_2 };
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+
+    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    depInfo.memoryBarrierCount = 1u;
+    depInfo.pMemoryBarriers = &barrier;
+    m_cmd->cmdPipelineBarrier(DxvkCmdBuffer::ExecBuffer, &depInfo);
+
+    auto pipeline = m_common->metaPredicate().getPipeline();
+
+    m_cmd->cmdBindPipeline(DxvkCmdBuffer::ExecBuffer,
+      VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+
+    DxvkMetaPredicatePushConstants pushData = { };
+    pushData.srcVa = slice.gpuAddress;
+    pushData.dstVa = slice.gpuAddress + inputSize;
+    pushData.count = uint32_t(handles.size() + 1u);
+    pushData.mode = overflow
+      ? DxvkMetaPredicateObjects::ModeOverflow
+      : DxvkMetaPredicateObjects::ModeAnySamples;
+
+    m_cmd->bindResources(DxvkCmdBuffer::ExecBuffer,
+      pipeline.layout, 0u, nullptr, sizeof(pushData), &pushData);
+
+    m_cmd->cmdDispatch(DxvkCmdBuffer::ExecBuffer, 1u, 1u, 1u);
+
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT;
+    barrier.dstAccessMask = VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT;
+    m_cmd->cmdPipelineBarrier(DxvkCmdBuffer::ExecBuffer, &depInfo);
+
+    m_predicateOffset = slice.offset + inputSize;
+    m_predicateInvert = value;
+    m_predicateEnabled = true;
+  }
+
+
   void DxvkContext::beginQuery(const Rc<DxvkQuery>& query) {
     m_queryManager.enableQuery(m_cmd, query);
   }
@@ -830,6 +967,8 @@ namespace dxvk {
           uint32_t y,
           uint32_t z) {
     if (this->commitComputeState<false>()) {
+      PredicateScope predicate(this);
+
       m_queryManager.beginQueries(m_cmd,
         VK_QUERY_TYPE_PIPELINE_STATISTICS);
       
@@ -850,6 +989,8 @@ namespace dxvk {
       return;
 
     if (this->commitComputeState<true>()) {
+      PredicateScope predicate(this);
+
       m_queryManager.beginQueries(m_cmd,
         VK_QUERY_TYPE_PIPELINE_STATISTICS);
 
@@ -922,6 +1063,8 @@ namespace dxvk {
           uint32_t          counterDivisor,
           uint32_t          counterBias) {
     if (this->commitGraphicsState<false, true>()) {
+      PredicateScope predicate(this);
+
       auto argInfo = m_state.id.cntBuffer.getSliceInfo();
 
       m_cmd->cmdDrawIndirectVertexCount(1, 0,
@@ -1601,6 +1744,8 @@ namespace dxvk {
           uint32_t                  count,
     const T*                        draws) {
     if (this->commitGraphicsState<Indexed, false>()) {
+      PredicateScope predicate(this);
+
       if (count == 1u) {
         // Most common case, just emit a single draw
         if constexpr (Indexed) {
@@ -1616,8 +1761,11 @@ namespace dxvk {
         // If the current pipeline has storage resource hazards,
         // unroll draws and insert a barrier after each one.
         for (uint32_t i = 0; i < count; i++) {
-          if (i)
+          if (i) {
+            predicate.suspend();
             this->commitGraphicsState<Indexed, false>();
+            predicate.resume();
+          }
 
           if constexpr (Indexed) {
             m_cmd->cmdDrawIndexed(draws[i].indexCount, draws[i].instanceCount,
@@ -1732,6 +1880,8 @@ namespace dxvk {
       return;
 
     if (this->commitGraphicsState<Indexed, true>()) {
+      PredicateScope predicate(this);
+
       if (likely(count == 1u || !unroll || !needsDrawBarriers())) {
         if (Indexed) {
           m_cmd->cmdDrawIndexedIndirect(argInfo.buffer,
@@ -1756,8 +1906,11 @@ namespace dxvk {
         // If the pipeline has order-sensitive stores, submit one
         // draw at a time and insert barriers in between.
         for (uint32_t i = 0; i < count; i++) {
-          if (i)
+          if (i) {
+            predicate.suspend();
             this->commitGraphicsState<Indexed, true>();
+            predicate.resume();
+          }
 
           if (Indexed) {
             m_cmd->cmdDrawIndexedIndirect(argInfo.buffer,
@@ -1801,6 +1954,8 @@ namespace dxvk {
       return;
 
     if (this->commitGraphicsState<Indexed, true>()) {
+      PredicateScope predicate(this);
+
       if (Indexed) {
         m_cmd->cmdDrawIndexedIndirectCount(
           argInfo.buffer, argInfo.offset + offset,

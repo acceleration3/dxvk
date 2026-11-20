@@ -239,6 +239,18 @@ namespace dxvk {
      */
     void end();
 
+    /**
+     * \brief Queries the inputs of a GPU-side predicate resolve
+     *
+     * \param [out] handles Query pool slots that still hold results
+     * \param [out] base Data already accumulated from earlier slots
+     * \returns \c false if the query has not ended
+     */
+    bool getPredicateSources(
+            small_vector<std::pair<VkQueryPool, uint32_t>, 8>& handles,
+            small_vector<Rc<DxvkGpuQuery>, 8>& queries,
+            DxvkQueryData&      base);
+
   private:
 
     std::atomic<uint32_t> m_refCount = { 0u };

@@ -2700,10 +2700,21 @@ namespace dxvk {
     m_state.pr.predicateObject = predicate;
     m_state.pr.predicateValue  = PredicateValue;
 
-    static bool s_errorShown = false;
+    Rc<DxvkQuery> source;
+    bool overflow = false;
 
-    if (pPredicate && !std::exchange(s_errorShown, true))
-      Logger::err("D3D11DeviceContext::SetPredication: Stub");
+    if (predicate) {
+      source = predicate->GetPredicateSource();
+      overflow = predicate->IsOverflowPredicate();
+    }
+
+    EmitCs([
+      cSource   = std::move(source),
+      cValue    = bool(PredicateValue),
+      cOverflow = overflow
+    ] (DxvkContext* ctx) {
+      ctx->setPredicate(cSource, cValue, cOverflow);
+    });
   }
 
 
@@ -5100,6 +5111,10 @@ namespace dxvk {
     m_state.rs.reset();
     m_state.so.reset();
     m_state.pr.reset();
+
+    EmitCs([] (DxvkContext* ctx) {
+      ctx->setPredicate(nullptr, false, false);
+    });
 
     // Reset resource bindings
     m_state.cbv.reset();
