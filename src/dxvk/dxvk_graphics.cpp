@@ -625,14 +625,9 @@ namespace dxvk {
       rsLineInfo.pNext = std::exchange(rsInfo.pNext, &rsLineInfo);
       rsLineInfo.lineRasterizationMode = state.rs.lineMode();
 
-      if (rsLineInfo.lineRasterizationMode == VK_LINE_RASTERIZATION_MODE_RECTANGULAR_EXT) {
-        // This line width matches expected D3D behaviour, hard-code this
-        // so that we don't need to introduce an extra bit of render state.
-        rsInfo.lineWidth = 1.4f;
-      } else {
-        // Vulkan does not allow alphaToCoverage or sample rate shading
-        // in combination with smooth lines. Override the line mode to
-        // rectangular to fix this, but keep the width fixed at 1.0.
+      rsInfo.lineWidth = 1.4f;
+
+      if (rsLineInfo.lineRasterizationMode != VK_LINE_RASTERIZATION_MODE_RECTANGULAR_EXT) {
         bool needsOverride = state.ms.enableAlphaToCoverage()
           || (shaders.fs && shaders.fs->metadata().flags.test(DxvkShaderFlag::HasSampleRateShading));
 
