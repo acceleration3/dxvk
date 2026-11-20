@@ -790,6 +790,8 @@ namespace dxvk {
     D3D11ContextState           m_state;
     UINT                        m_flags;
 
+    D3D11TirBinding             m_tir;
+
     DxvkStagingBuffer           m_staging;
 
     D3D11CmdType                m_csDataType = D3D11CmdType::None;
@@ -850,6 +852,10 @@ namespace dxvk {
     void ApplyRasterizerSampleCount();
 
     void ApplyViewportState();
+
+    void ApplyTargetIndependentRasterization();
+
+    D3D11TirDraw DetermineTargetIndependentRasterization();
 
     void BatchDraw(
       const VkDrawIndirectCommand&            draw);

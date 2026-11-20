@@ -43,6 +43,16 @@ namespace dxvk {
       return m_state;
     }
 
+    /**
+     * \brief State for emulated target-independent rasterization
+     *
+     * Rasterizes at one sample, conservatively where supported.
+     * \returns Rasterizer state for emulated TIR draws
+     */
+    DxvkRasterizerState GetTirState() const {
+      return m_tirState;
+    }
+
     DxvkDepthBias GetDepthBias() const {
       return m_depthBias;
     }
@@ -61,9 +71,10 @@ namespace dxvk {
             D3D11_RASTERIZER_DESC2* pDesc);
     
   private:
-    
+
     D3D11_RASTERIZER_DESC2 m_desc;
     DxvkRasterizerState    m_state      = { };
+    DxvkRasterizerState    m_tirState   = { };
     DxvkDepthBias          m_depthBias  = { };
     D3D10RasterizerState   m_d3d10;
 
