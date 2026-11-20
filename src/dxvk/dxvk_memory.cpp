@@ -1306,6 +1306,11 @@ namespace dxvk {
     const VkBufferCreateInfo&         createInfo,
     const DxvkAllocationInfo&         allocationInfo,
     const DxvkBufferImportInfo&       importInfo) {
+    // The pool is the allocator's, which every other path that creates or
+    // frees an allocation reaches under the lock: an embedder importing
+    // storage while the device frees allocations would race them for it.
+    std::unique_lock lock(m_mutex);
+
     Rc<DxvkResourceAllocation> allocation = m_allocationPool.create(this, nullptr);
     allocation->m_flags.set(DxvkAllocationFlag::Imported);
     allocation->m_resourceCookie = allocationInfo.resourceCookie;

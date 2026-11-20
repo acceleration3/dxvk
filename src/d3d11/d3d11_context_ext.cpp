@@ -229,6 +229,39 @@ namespace dxvk {
   }
 
 
+  template<typename ContextType>
+  HRESULT STDMETHODCALLTYPE D3D11DeviceContextExt<ContextType>::BindBufferStorage(
+          ID3D11Buffer*           pBuffer,
+          VkBuffer                Storage,
+          VkDeviceSize            Offset,
+          VkDeviceSize            Length,
+          void*                   pMapPtr) {
+    D3D10DeviceLock lock = m_ctx->LockContext();
+
+    if (!pBuffer || !Storage)
+      return E_INVALIDARG;
+
+    auto buffer = static_cast<D3D11Buffer*>(pBuffer);
+
+    if (Length < buffer->Desc()->ByteWidth)
+      return E_INVALIDARG;
+
+    DxvkBufferImportInfo importInfo;
+    importInfo.buffer = Storage;
+    importInfo.offset = Offset;
+    importInfo.mapPtr = pMapPtr;
+
+    m_ctx->EmitCs([
+      cBuffer     = buffer->GetBuffer(),
+      cAllocation = buffer->ImportSlice(importInfo)
+    ] (DxvkContext* ctx) mutable {
+      ctx->invalidateBuffer(cBuffer, std::move(cAllocation));
+    });
+
+    return S_OK;
+  }
+
+
   template class D3D11DeviceContextExt<D3D11DeferredContext>;
   template class D3D11DeviceContextExt<D3D11ImmediateContext>;
 

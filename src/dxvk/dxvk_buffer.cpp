@@ -68,6 +68,20 @@ namespace dxvk {
   }
 
 
+  Rc<DxvkResourceAllocation> DxvkBuffer::importStorage(const DxvkBufferImportInfo& importInfo) {
+    DxvkAllocationInfo allocationInfo = { };
+    allocationInfo.resourceCookie = cookie();
+
+    VkBufferCreateInfo info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    info.flags = m_info.flags;
+    info.usage = m_info.usage;
+    info.size = m_info.size;
+    m_sharingMode.fill(info);
+
+    return m_allocator->importBufferResource(info, allocationInfo, importInfo);
+  }
+
+
   bool DxvkBuffer::canRelocate() const {
     return !m_bufferInfo.mapPtr && !m_stableAddress
         && !(m_info.flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT);

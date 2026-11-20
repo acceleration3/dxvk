@@ -166,6 +166,25 @@ ID3D11VkExtContext1 : public ID3D11VkExtContext {
 
 
 /**
+ * \brief Extended extended extended D3D11 context
+ *
+ * Lets an embedder point a buffer at memory it imported itself, recorded in
+ * order with the context's other commands, as a discard would rename it:
+ * commands recorded before read the old storage, those after the new.
+ */
+MIDL_INTERFACE("4f0b8a51-7d1e-4c8a-9b0e-6a2c3f5d8e17")
+ID3D11VkExtContext2 : public ID3D11VkExtContext1 {
+
+  virtual HRESULT STDMETHODCALLTYPE BindBufferStorage(
+          ID3D11Buffer*           pBuffer,
+          VkBuffer                Storage,
+          VkDeviceSize            Offset,
+          VkDeviceSize            Length,
+          void*                   pMapPtr) = 0;
+};
+
+
+/**
  * \brief Frame reports used for Reflex interop
  */
 struct D3D_LOW_LATENCY_FRAME_REPORT
@@ -229,5 +248,6 @@ __CRT_UUID_DECL(ID3D11VkExtDevice,         0x8a6e3c42,0xf74c,0x45b7,0x82,0x65,0x
 __CRT_UUID_DECL(ID3D11VkExtDevice1,        0xcfcf64ef,0x9586,0x46d0,0xbc,0xa4,0x97,0xcf,0x2c,0xa6,0x1b,0x06);
 __CRT_UUID_DECL(ID3D11VkExtContext,        0xfd0bca13,0x5cb6,0x4c3a,0x98,0x7e,0x47,0x50,0xde,0x2c,0xa7,0x91);
 __CRT_UUID_DECL(ID3D11VkExtContext1,       0x874b09b2,0xae0b,0x41d8,0x84,0x76,0x5f,0x3b,0x7a,0x0e,0x87,0x9d);
+__CRT_UUID_DECL(ID3D11VkExtContext2,       0x4f0b8a51,0x7d1e,0x4c8a,0x9b,0x0e,0x6a,0x2c,0x3f,0x5d,0x8e,0x17);
 __CRT_UUID_DECL(ID3DLowLatencyDevice,      0xf3112584,0x41f9,0x348d,0xa5,0x9b,0x00,0xb7,0xe1,0xd2,0x85,0xd6);
 #endif
