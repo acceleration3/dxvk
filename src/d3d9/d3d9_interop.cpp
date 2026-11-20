@@ -426,6 +426,33 @@ namespace dxvk {
   HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::CreateImage(
           const D3D9VkExtImageDesc* params,
           IDirect3DResource9**      ppResult) {
+    return CreateImageFrom(params, VK_NULL_HANDLE, ppResult);
+  }
+
+  HRESULT STDMETHODCALLTYPE D3D9VkInteropDevice::CreateImageOver(
+          const D3D9VkExtImageDesc* params,
+          VkImage                   Image,
+          IDirect3DResource9**      ppResult) {
+    InitReturnPtr(ppResult);
+
+    if (unlikely(params == nullptr || Image == VK_NULL_HANDLE))
+      return D3DERR_INVALIDCALL;
+
+    if (unlikely(params->Type != D3DRTYPE_SURFACE && params->Type != D3DRTYPE_TEXTURE))
+      return D3DERR_INVALIDCALL;
+
+    if (unlikely(params->Pool != D3DPOOL_DEFAULT || params->MipLevels != 1
+              || params->MultiSample != D3DMULTISAMPLE_NONE))
+      return D3DERR_INVALIDCALL;
+
+    D3D9DeviceLock lock = m_device->LockDevice();
+    return CreateImageFrom(params, Image, ppResult);
+  }
+
+  HRESULT D3D9VkInteropDevice::CreateImageFrom(
+          const D3D9VkExtImageDesc* params,
+          VkImage                   Image,
+          IDirect3DResource9**      ppResult) {
     InitReturnPtr(ppResult);
 
     if (unlikely(ppResult == nullptr))
@@ -478,6 +505,7 @@ namespace dxvk {
     desc.IsAttachmentOnly   = params->IsAttachmentOnly;
     desc.IsLockable         = params->IsLockable;
     desc.ImageUsage         = params->ImageUsage;
+    desc.ImportedImage      = Image;
     
     D3DRESOURCETYPE textureType = params->Type == D3DRTYPE_SURFACE ? D3DRTYPE_TEXTURE : params->Type;
 
@@ -510,7 +538,8 @@ namespace dxvk {
     try {
       const bool isExtended = m_device->IsD3DCompatibile(D3DCompatibility::D3D9Ex);
       const Com<ResourceType> texture = new ResourceType(m_device, &desc, isExtended);
-      m_device->m_initializer->InitTexture(texture->GetCommonTexture());
+      if (desc.ImportedImage == VK_NULL_HANDLE)
+        m_device->m_initializer->InitTexture(texture->GetCommonTexture());
       *ppResult = texture.ref();
 
       if (desc.Pool == D3DPOOL_DEFAULT)

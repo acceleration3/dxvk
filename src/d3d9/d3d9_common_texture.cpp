@@ -523,6 +523,13 @@ namespace dxvk {
       imageInfo.debugName = debugName.c_str();
     }
 
+    if (m_desc.ImportedImage != VK_NULL_HANDLE) {
+      // Another device or the embedder reads the memory behind the image:
+      // clears and layout changes must reach each submission
+      imageInfo.shared = true;
+      return m_device->GetDXVKDevice()->importImage(imageInfo, m_desc.ImportedImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+
     return m_device->GetDXVKDevice()->createImage(imageInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   }
 

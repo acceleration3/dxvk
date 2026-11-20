@@ -327,6 +327,23 @@ ID3D9VkInteropDevice1 : public ID3D9VkInteropDevice {
    * the device.
    */
   virtual void STDMETHODCALLTYPE WaitForIdle() = 0;
+
+  /**
+   * \brief Creates a surface or 2D texture over an image of the embedder
+   *
+   * The image was made on this device with the format, extent and usage
+   * the description gives, one mip level and one sample, and has its
+   * memory bound. The embedder keeps it alive until the resource and every
+   * command that used it are gone. Its contents are kept, not cleared.
+   * \param [in] desc Image description: SURFACE or TEXTURE in the DEFAULT pool
+   * \param [in] Image The image
+   * \param [out, retval] ppResult The surface or texture
+   * \returns D3D_OK, D3DERR_INVALIDCALL, or D3DERR_OUTOFVIDEOMEMORY
+   */
+  virtual HRESULT STDMETHODCALLTYPE CreateImageOver(
+          const D3D9VkExtImageDesc* desc,
+          VkImage                   Image,
+          IDirect3DResource9**      ppResult) = 0;
 };
 
 /**

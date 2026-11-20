@@ -51,6 +51,9 @@ namespace dxvk {
 
     // Additional parameters for ID3D9VkInteropDevice
     VkImageUsageFlags   ImageUsage = 0;
+
+    // An image the embedder made on this device and keeps alive
+    VkImage             ImportedImage = VK_NULL_HANDLE;
   };
 
   struct D3D9ColorView {

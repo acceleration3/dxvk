@@ -156,7 +156,17 @@ namespace dxvk {
 
     void STDMETHODCALLTYPE WaitForIdle();
 
+    HRESULT STDMETHODCALLTYPE CreateImageOver(
+            const D3D9VkExtImageDesc* desc,
+            VkImage                   Image,
+            IDirect3DResource9**      ppResult);
+
   private:
+
+    HRESULT CreateImageFrom(
+            const D3D9VkExtImageDesc* desc,
+            VkImage                   Image,
+            IDirect3DResource9**      ppResult);
 
     template <typename ResourceType>
     HRESULT CreateTextureResource(
