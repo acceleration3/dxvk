@@ -3,6 +3,7 @@
 #include "../dxgi/dxgi_adapter.h"
 
 #include "../dxvk/dxvk_instance.h"
+#include "../dxvk/dxvk_vram_gate.h"
 
 #include "d3d11_device.h"
 #include "d3d11_enums.h"
@@ -217,6 +218,11 @@ extern "C" {
     return S_OK;
   }
   
+
+    DLLEXPORT void dxvk_proton_set_vram_gate(const dxvk::DxvkVramGate* gate) {
+      dxvk::g_vramGate = gate;
+    }
+
 
     DLLEXPORT HRESULT __stdcall D3D11CoreCreateDevice(
             IDXGIFactory*       pFactory,
