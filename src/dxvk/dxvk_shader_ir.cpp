@@ -620,6 +620,9 @@ namespace dxvk {
       if (builtIn == dxbc_spv::ir::BuiltIn::eIsFullyCovered)
         m_metadata.flags.set(DxvkShaderFlag::UsesFragmentCoverage);
 
+      if (builtIn == dxbc_spv::ir::BuiltIn::eSampleId)
+        m_metadata.flags.set(DxvkShaderFlag::HasSampleRateShading);
+
       return ++op;
     }
 
