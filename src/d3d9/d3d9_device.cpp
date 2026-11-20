@@ -223,6 +223,11 @@ namespace dxvk {
   HRESULT STDMETHODCALLTYPE D3D9DeviceEx::TestCooperativeLevel() {
     D3D9DeviceLock lock = LockDevice();
 
+    // A Vulkan device that was lost is a device lost for good: an embedder
+    // drawing with no window asks here, as an application would.
+    if (unlikely(m_dxvkDevice->getDeviceStatus() == VK_ERROR_DEVICE_LOST))
+      return D3DERR_DEVICELOST;
+
     // Equivelant of D3D11/DXGI present tests. We can always present.
     if (likely(m_deviceLostState == D3D9DeviceLostState::Ok)) {
       return D3D_OK;
