@@ -6,6 +6,7 @@
     D3D11On12CreateDevice;
     dxvk_proton_set_vram_gate;
     dxvk_proton_set_lifecycle_gates;
+    dxvk_proton_fast_linked_pipelines;
     dxvk_take_out_of_memory;
 
   local:

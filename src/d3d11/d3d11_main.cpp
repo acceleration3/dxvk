@@ -224,6 +224,11 @@ extern "C" {
     }
 
 
+    DLLEXPORT uint64_t dxvk_proton_fast_linked_pipelines() {
+      return dxvk::g_fastLinkedPipelines.load(std::memory_order_relaxed);
+    }
+
+
     DLLEXPORT void dxvk_proton_set_lifecycle_gates(const dxvk::vk::LifecycleGates* gates) {
       dxvk::vk::g_lifecycleGates = gates && gates->size >= sizeof(dxvk::vk::LifecycleGates) ? gates : nullptr;
     }

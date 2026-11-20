@@ -621,12 +621,7 @@ namespace dxvk {
     }
 
     // Set up line rasterization mode as requested by the application.
-    VkLineRasterizationModeEXT lineMode = state.rs.lineMode();
-
-    if (lineMode == VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT
-     && state.rs.sampleCount() <= VK_SAMPLE_COUNT_1_BIT
-     && device->features().extLineRasterization.bresenhamLines)
-      lineMode = VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT;
+    VkLineRasterizationModeEXT lineMode = effectiveLineMode(device, state);
 
     if (lineMode != VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT && isLineRendering(shaders, state)) {
       rsLineInfo.pNext = std::exchange(rsInfo.pNext, &rsLineInfo);
@@ -696,6 +691,22 @@ namespace dxvk {
 
     hash.add(rsLineInfo.lineRasterizationMode);
     return hash;
+  }
+
+
+  VkLineRasterizationModeEXT DxvkGraphicsPipelinePreRasterizationState::effectiveLineMode(
+    const DxvkDevice*                     device,
+    const DxvkGraphicsPipelineStateInfo&  state) {
+    VkLineRasterizationModeEXT lineMode = state.rs.lineMode();
+
+    VkSampleCountFlags sampleCount = state.ms.sampleCount() ? state.ms.sampleCount() : state.rs.sampleCount();
+
+    if (lineMode == VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT
+     && sampleCount <= VK_SAMPLE_COUNT_1_BIT
+     && device->features().extLineRasterization.bresenhamLines)
+      lineMode = VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT;
+
+    return lineMode;
   }
 
 
@@ -1240,6 +1251,9 @@ namespace dxvk {
     if (!fastHandle && !baseHandle)
       this->logPipelineState(LogLevel::Error, state);
 
+    if (baseHandle)
+      g_fastLinkedPipelines.fetch_add(1u, std::memory_order_relaxed);
+
     m_stats->numGraphicsPipelines += 1;
     return m_pipelines.add(state, baseHandle, fastHandle, computeAttachmentMask(state));
   }
@@ -1262,7 +1276,7 @@ namespace dxvk {
 
     if (state.rs.polygonMode() != VK_POLYGON_MODE_FILL
      || state.rs.conservativeMode() != VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT
-     || (state.rs.lineMode() != VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT && isLineRendering))
+     || (isLineRendering && DxvkGraphicsPipelinePreRasterizationState::effectiveLineMode(m_device, state) != VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT))
       return false;
 
     // Depth clip is assumed to be enabled. If the driver does not

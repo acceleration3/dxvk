@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 
 #include "dxvk_bind_mask.h"
@@ -11,6 +12,8 @@
 #include "dxvk_stats.h"
 
 namespace dxvk {
+
+  inline std::atomic<uint64_t> g_fastLinkedPipelines = { 0u };
   
   class DxvkDevice;
   class DxvkPipelineManager;
@@ -186,6 +189,10 @@ namespace dxvk {
 
     static bool isLineRendering(
       const DxvkGraphicsPipelineShaders&    shaders,
+      const DxvkGraphicsPipelineStateInfo&  state);
+
+    static VkLineRasterizationModeEXT effectiveLineMode(
+      const DxvkDevice*                     device,
       const DxvkGraphicsPipelineStateInfo&  state);
 
   };
