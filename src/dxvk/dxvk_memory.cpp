@@ -1330,6 +1330,8 @@ namespace dxvk {
     const VkImageCreateInfo&          createInfo,
     const DxvkAllocationInfo&         allocationInfo,
           VkImage                     imageHandle) {
+    std::unique_lock lock(m_mutex);
+
     Rc<DxvkResourceAllocation> allocation = m_allocationPool.create(this, nullptr);
     allocation->m_flags.set(DxvkAllocationFlag::Imported);
     allocation->m_resourceCookie = allocationInfo.resourceCookie;
@@ -1591,6 +1593,8 @@ namespace dxvk {
   DxvkResourceAllocation* DxvkMemoryAllocator::createAllocation(
           DxvkSparsePageTable*  sparsePageTable,
     const DxvkAllocationInfo&   allocationInfo) {
+    std::unique_lock lock(m_mutex);
+
     auto allocation = m_allocationPool.create(this, nullptr);
     allocation->m_resourceCookie = allocationInfo.resourceCookie;
     allocation->m_sparsePageTable = sparsePageTable;

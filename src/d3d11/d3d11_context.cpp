@@ -6052,10 +6052,20 @@ namespace dxvk {
     uint32_t slotId = D3D11ShaderResourceMapping::computeCbvBinding(ShaderStage,
       D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT + 1u);
 
-    if (NumClassInstances) {
-      auto buffer = AllocInstanceDataBuffer(ShaderStage);
-      auto slice = buffer->allocateStorage();
+    Rc<DxvkBuffer> buffer;
+    Rc<DxvkResourceAllocation> slice;
 
+    if (NumClassInstances) {
+      buffer = AllocInstanceDataBuffer(ShaderStage);
+
+      if (likely(buffer))
+        slice = buffer->allocateStorage();
+
+      if (unlikely(!slice))
+        Logger::err("D3D11: Out of memory allocating class instance data");
+    }
+
+    if (slice) {
       auto data = reinterpret_cast<D3D11InstanceData*>(slice->mapPtr());
 
       for (uint32_t i = 0u; i < D3D11ClassInstanceState::MaxInstances; i++)
@@ -6113,10 +6123,15 @@ namespace dxvk {
       bufferInfo.access = VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
       bufferInfo.debugName = "Instance data";
 
-      m_instanceData[ShaderStage] = m_device->createBuffer(bufferInfo,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+      try {
+        m_instanceData[ShaderStage] = m_device->createBuffer(bufferInfo,
+          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+      } catch (const DxvkOutOfMemoryError& e) {
+        Logger::err(e.message());
+        return nullptr;
+      }
     }
 
     return m_instanceData[ShaderStage];

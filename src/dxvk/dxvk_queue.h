@@ -110,6 +110,10 @@ namespace dxvk {
     VkResult getLastError() const {
       return m_lastError.load();
     }
+
+    void markDeviceLost() {
+      m_lastError = VK_ERROR_DEVICE_LOST;
+    }
     
     /**
      * \brief Submits a command list asynchronously

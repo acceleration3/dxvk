@@ -1896,6 +1896,10 @@ namespace dxvk {
     DxvkComputePipeline* lookupComputePipeline(
       const DxvkComputePipelineShaders&   shaders);
     
+    Rc<DxvkBuffer> tryCreateBuffer(
+      const DxvkBufferCreateInfo&         createInfo,
+            VkMemoryPropertyFlags         memoryType);
+
     Rc<DxvkBuffer> createZeroBuffer(
             VkDeviceSize              size);
 

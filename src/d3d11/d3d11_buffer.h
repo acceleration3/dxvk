@@ -125,7 +125,10 @@ namespace dxvk {
     
     Rc<DxvkResourceAllocation> DiscardSlice(DxvkLocalAllocationCache* cache) {
       auto allocation = m_buffer->allocateStorage(cache);
-      m_mapPtr = allocation->mapPtr();
+
+      if (likely(allocation))
+        m_mapPtr = allocation->mapPtr();
+
       return allocation;
     }
 

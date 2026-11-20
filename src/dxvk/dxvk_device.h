@@ -264,6 +264,10 @@ namespace dxvk {
       return m_submissionQueue.getLastError();
     }
 
+    void markDeviceLost() {
+      m_submissionQueue.markDeviceLost();
+    }
+
     /**
      * \brief Queries mapped image subresource layout
      *

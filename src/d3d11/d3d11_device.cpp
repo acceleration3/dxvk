@@ -112,6 +112,9 @@ namespace dxvk {
 
       *ppBuffer = buffer.ref();
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -158,6 +161,9 @@ namespace dxvk {
       m_initializer->InitTexture(texture->GetCommonTexture(), pInitialData);
       *ppTexture1D = texture.ref();
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -246,6 +252,9 @@ namespace dxvk {
       m_initializer->InitTexture(texture->GetCommonTexture(), pInitialData);
       *ppTexture2D = texture.ref();
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -333,6 +342,9 @@ namespace dxvk {
       m_initializer->InitTexture(texture->GetCommonTexture(), pInitialData);
       *ppTexture3D = texture.ref();
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -421,6 +433,9 @@ namespace dxvk {
     try {
       *ppSRView = ref(new D3D11ShaderResourceView(this, pResource, &desc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -511,6 +526,9 @@ namespace dxvk {
       m_initializer->InitUavCounter(uav);
       *ppUAView = ref(uav);
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -605,6 +623,9 @@ namespace dxvk {
 
       *ppRTView = rtv;
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -653,6 +674,9 @@ namespace dxvk {
     try {
       *ppDepthStencilView = ref(new D3D11DepthStencilView(this, pResource, &desc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -778,6 +802,9 @@ namespace dxvk {
           attrCount, attrList.data(),
           bindCount, bindList.data()));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -1176,6 +1203,9 @@ namespace dxvk {
     try {
       *ppSamplerState = m_samplerObjects.Create(this, desc);
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -1233,6 +1263,9 @@ namespace dxvk {
     try {
       *ppQuery = ref(new D3D11Query(this, *pQueryDesc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -1265,6 +1298,9 @@ namespace dxvk {
       *ppPredicate = D3D11Query::AsPredicate(
         ref(new D3D11Query(this, desc)));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -1371,6 +1407,9 @@ namespace dxvk {
     try {
       Com<D3D11Fence> fence = new D3D11Fence(this, InitialValue, Flags, INVALID_HANDLE_VALUE);
       return fence->QueryInterface(riid, ppFence);
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -1511,6 +1550,10 @@ namespace dxvk {
           texture->QueryInterface(ReturnedInterface, ppResource);
           return S_OK;
         }
+        catch (const DxvkOutOfMemoryError& e) {
+          Logger::err(e.message());
+          return E_OUTOFMEMORY;
+        }
         catch (const DxvkError& e) {
           Logger::err(e.message());
           return E_INVALIDARG;
@@ -1609,6 +1652,10 @@ namespace dxvk {
           texture->QueryInterface(ReturnedInterface, ppResource);
           return S_OK;
         }
+        catch (const DxvkOutOfMemoryError& e) {
+          Logger::err(e.message());
+          return E_OUTOFMEMORY;
+        }
         catch (const DxvkError& e) {
           Logger::err(e.message());
           return E_INVALIDARG;
@@ -1646,6 +1693,9 @@ namespace dxvk {
     try {
       Com<D3D11Fence> fence = new D3D11Fence(this, 0, D3D11_FENCE_FLAG_SHARED, hFence);
       return fence->QueryInterface(ReturnedInterface, ppFence);
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -2615,6 +2665,10 @@ namespace dxvk {
       texture->QueryInterface(ReturnedInterface, ppResource);
       return S_OK;
     }
+    catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
+    }
     catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_INVALIDARG;
@@ -3301,6 +3355,9 @@ namespace dxvk {
       auto enumerator = static_cast<D3D11VideoProcessorEnumerator*>(pEnum);
       *ppVideoProcessor = ref(new D3D11VideoProcessor(m_device, enumerator, RateConversionIndex));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -3347,6 +3404,9 @@ namespace dxvk {
     try {
       *ppVPIView = ref(new D3D11VideoProcessorInputView(m_device, pResource, *pDesc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -3362,6 +3422,9 @@ namespace dxvk {
     try {
       *ppVPOView = ref(new D3D11VideoProcessorOutputView(m_device, pResource, *pDesc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -3375,6 +3438,9 @@ namespace dxvk {
     try {
       *ppEnum = ref(new D3D11VideoProcessorEnumerator(m_device, *pDesc));
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
@@ -3720,6 +3786,9 @@ namespace dxvk {
       
       *ppSwapChain = presenter.ref();
       return S_OK;
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      return E_OUTOFMEMORY;
     } catch (const DxvkError& e) {
       Logger::err(e.message());
       return E_FAIL;
