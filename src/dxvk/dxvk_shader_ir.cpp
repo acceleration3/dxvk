@@ -290,8 +290,10 @@ namespace dxvk {
 
       int32_t rasterizedStream = 0u;
 
-      if (m_stage == dxbc_spv::ir::ShaderStage::eGeometry)
+      if (m_stage == dxbc_spv::ir::ShaderStage::eGeometry) {
         rasterizedStream = m_info.rasterizedStream;
+        m_metadata.rasterizedStream = rasterizedStream;
+      }
 
       m_metadata.outputs = convertIoMap(dxbc_spv::ir::IoMap::forOutputs(m_builder, uint32_t(rasterizedStream)));
 
