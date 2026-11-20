@@ -1527,6 +1527,12 @@ namespace dxvk {
       }
 
       Rc<DxvkResourceAllocation> uboSlice = m_ubo->allocateStorage();
+
+      if (unlikely(!uboSlice)) {
+        m_device->markDeviceLost();
+        return;
+      }
+
       memcpy(uboSlice->mapPtr(), &uboData, sizeof(uboData));
 
       DxvkViewport vp = { viewport, scissor };

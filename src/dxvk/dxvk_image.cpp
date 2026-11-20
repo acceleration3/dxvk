@@ -160,7 +160,14 @@ namespace dxvk {
     m_globalLayout = (m_info.sharing.mode != DxvkSharedHandleMode::Import)
       ? m_info.initialLayout : m_info.layout;
 
-    assignStorage(allocateStorage());
+    Rc<DxvkResourceAllocation> storage = allocateStorage();
+
+    if (unlikely(!storage)) {
+      m_allocator->unregisterResource(this);
+      throw DxvkOutOfMemoryError("DxvkImage: out of memory");
+    }
+
+    assignStorage(std::move(storage));
   }
 
 

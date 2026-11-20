@@ -472,9 +472,11 @@ namespace dxvk {
                       | VK_ACCESS_TRANSFER_READ_BIT;
       bufInfo.debugName = "Temp buffer";
 
-      auto tmpBuffer = m_device->createBuffer(
-        bufInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-      
+      auto tmpBuffer = tryCreateBuffer(bufInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      if (unlikely(!tmpBuffer))
+        return;
+
       VkDeviceSize tmpOffset = 0;
       
       this->copyBuffer(tmpBuffer, tmpOffset, dstBuffer, srcOffset, numBytes);
@@ -705,7 +707,10 @@ namespace dxvk {
                         | VK_ACCESS_SHADER_READ_BIT;
       bufferInfo.debugName = "Temp buffer";
 
-      Rc<DxvkBuffer> tmpBuffer = m_device->createBuffer(bufferInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      Rc<DxvkBuffer> tmpBuffer = tryCreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      if (unlikely(!tmpBuffer))
+        return;
 
       auto tmpBufferSlice = tmpBuffer->getSliceInfo();
       auto srcBufferSlice = srcView->getSliceInfo();
@@ -965,7 +970,12 @@ namespace dxvk {
     }
 
     if (copySize) {
-      auto srcSlice = createZeroBuffer(copySize)->getSliceInfo();
+      auto zeroBuffer = createZeroBuffer(copySize);
+
+      if (unlikely(!zeroBuffer))
+        return;
+
+      auto srcSlice = zeroBuffer->getSliceInfo();
 
       VkBufferCopy2 copyRegion = { VK_STRUCTURE_TYPE_BUFFER_COPY_2 };
       copyRegion.srcOffset = srcSlice.offset;
@@ -1062,7 +1072,12 @@ namespace dxvk {
           VkExtent3D blockCount = util::computeBlockCount(extent, formatInfo->blockSize);
           VkDeviceSize dataSize = util::flattenImageExtent(blockCount) * elementSize;
 
-          auto zeroSlice = createZeroBuffer(dataSize)->getSliceInfo();
+          auto zeroBuffer = createZeroBuffer(dataSize);
+
+          if (unlikely(!zeroBuffer))
+            return;
+
+          auto zeroSlice = zeroBuffer->getSliceInfo();
 
           for (uint32_t level = 0; level < subresources.levelCount; level++) {
             VkOffset3D offset = VkOffset3D { 0, 0, 0 };
@@ -1309,6 +1324,11 @@ namespace dxvk {
   void DxvkContext::invalidateBuffer(
     const Rc<DxvkBuffer>&           buffer,
           Rc<DxvkResourceAllocation>&& slice) {
+    if (unlikely(!slice)) {
+      m_device->markDeviceLost();
+      return;
+    }
+
     Rc<DxvkResourceAllocation> prevAllocation = buffer->assignStorage(std::move(slice));
     m_cmd->track(std::move(prevAllocation));
 
@@ -1560,6 +1580,11 @@ namespace dxvk {
     usage.flags |= createFlags;
 
     auto storage = image->allocateStorageWithUsage(usage, 0u);
+
+    if (unlikely(!storage)) {
+      m_device->markDeviceLost();
+      return false;
+    }
 
     DxvkRelocateImageInfo relocateInfo;
     relocateInfo.image = image;
@@ -2460,13 +2485,18 @@ namespace dxvk {
         usageInfo.viewFormats = &format;
 
         auto newStorage = dstImage->allocateStorageWithUsage(usageInfo, 0u);
-        auto oldStorage = dstImage->assignStorageWithUsage(std::move(newStorage), usageInfo);
 
-        m_descriptorState.dirtyViews(dstImage->getShaderStages());
+        if (likely(newStorage)) {
+          auto oldStorage = dstImage->assignStorageWithUsage(std::move(newStorage), usageInfo);
 
-        dstImage->resetTracking();
+          m_descriptorState.dirtyViews(dstImage->getShaderStages());
 
-        m_cmd->track(std::move(oldStorage));
+          dstImage->resetTracking();
+
+          m_cmd->track(std::move(oldStorage));
+        } else {
+          m_device->markDeviceLost();
+        }
       }
 
       // Record layout transition from default layout to attachment layout
@@ -5362,6 +5392,9 @@ namespace dxvk {
     DxvkResourceBufferInfo counterMemory = allocateScratchMemory(
       sizeof(uint32_t), sizeof(uint32_t) * counterDwordCount);
 
+    if (unlikely(!counterMemory.buffer))
+      return;
+
     m_cmd->cmdFillBuffer(DxvkCmdBuffer::InitBuffer,
       counterMemory.buffer, counterMemory.offset, counterMemory.size, 0u);
 
@@ -7265,6 +7298,9 @@ namespace dxvk {
     if (BindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS
      && unlikely(m_flags.all(DxvkContextFlag::GpIndependentSets, DxvkContextFlag::GpDirtySpecDataBlock))) {
       DxvkResourceBufferInfo specData = allocateSpecDataBuffer(pipelineLayout);
+
+      if (unlikely(!specData.buffer))
+        return;
       pipelineLayout->writeSpecData(specData.mapPtr, m_state.gp.state.sc.specConstants);
 
       VkDescriptorSet set = m_descriptorPool->alloc(m_trackingId, m_device->getSpecDataSetLayout());
@@ -9141,6 +9177,19 @@ namespace dxvk {
   }
 
 
+  Rc<DxvkBuffer> DxvkContext::tryCreateBuffer(
+    const DxvkBufferCreateInfo&         createInfo,
+          VkMemoryPropertyFlags         memoryType) {
+    try {
+      return m_device->createBuffer(createInfo, memoryType);
+    } catch (const DxvkOutOfMemoryError& e) {
+      Logger::err(e.message());
+      m_device->markDeviceLost();
+      return nullptr;
+    }
+  }
+
+
   Rc<DxvkBuffer> DxvkContext::createZeroBuffer(
           VkDeviceSize              size) {
     if (m_zeroBuffer && m_zeroBuffer->info().size >= size) {
@@ -9157,8 +9206,10 @@ namespace dxvk {
                     | VK_ACCESS_TRANSFER_READ_BIT;
     bufInfo.debugName = "Zero buffer";
 
-    m_zeroBuffer = m_device->createBuffer(bufInfo,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_zeroBuffer = tryCreateBuffer(bufInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (unlikely(!m_zeroBuffer))
+      return nullptr;
 
     auto slice = m_zeroBuffer->getSliceInfo();
 
@@ -9191,12 +9242,22 @@ namespace dxvk {
       bufInfo.access  = VK_ACCESS_2_UNIFORM_READ_BIT;
       bufInfo.debugName = "Spec data buffer";
 
-      m_specBuffer = m_device->createBuffer(bufInfo,
+      m_specBuffer = tryCreateBuffer(bufInfo,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      if (unlikely(!m_specBuffer))
+        return DxvkResourceBufferInfo();
     } else {
-      m_cmd->track(m_specBuffer->assignStorage(m_specBuffer->allocateStorage()));
+      auto storage = m_specBuffer->allocateStorage();
+
+      if (unlikely(!storage)) {
+        m_device->markDeviceLost();
+        return DxvkResourceBufferInfo();
+      }
+
+      m_cmd->track(m_specBuffer->assignStorage(std::move(storage)));
     }
 
     m_cmd->track(m_specBuffer, DxvkAccess::Write);
@@ -10901,8 +10962,10 @@ namespace dxvk {
                   | VK_ACCESS_2_SHADER_WRITE_BIT;
       info.debugName = "Scratch buffer";
 
-      m_scratchBuffer = m_device->createBuffer(info,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      m_scratchBuffer = tryCreateBuffer(info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+      if (unlikely(!m_scratchBuffer))
+        return DxvkResourceBufferInfo();
     }
 
     // Suballocate slice from buffer
