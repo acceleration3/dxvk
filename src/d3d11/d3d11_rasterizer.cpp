@@ -36,7 +36,7 @@ namespace dxvk {
     // we do not need to enable it in case the parameters are both 0.
     m_state.setDepthClip(desc.DepthClipEnable);
     m_state.setConservativeMode(DecodeConservativeRasterizationMode(desc.ConservativeRaster));
-    m_state.setSampleCount(desc.ForcedSampleCount);
+    m_state.setSampleCount(ClampForcedSampleCount(device, desc.ForcedSampleCount));
     m_state.setFlatShading(false);
     m_state.setLineMode(VK_LINE_RASTERIZATION_MODE_DEFAULT_EXT);
 
@@ -54,6 +54,31 @@ namespace dxvk {
       if (features.extLineRasterization.smoothLines)
         m_state.setLineMode(VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT);
     }
+
+    // Target-independent rasterization is emulated at one sample, the
+    // coverage computed in the pixel shader of every pixel the triangle
+    // touches (D3D11TirShaders).
+    m_tirState = m_state;
+    m_tirState.setSampleCount(0u);
+    m_tirState.setConservativeMode(features.extConservativeRasterization
+      ? VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT
+      : VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
+  }
+
+
+  UINT D3D11RasterizerState::ClampForcedSampleCount(
+          D3D11Device*                    device,
+          UINT                            count) {
+    // A draw the emulation does not take, lines or points with only UAVs
+    // bound, rasterizes at the forced count itself. Vulkan needs a count
+    // the device rasterizes without attachments at, at most the forced one.
+    VkSampleCountFlags supported = device->GetDXVKDevice()->properties()
+      .core.properties.limits.framebufferNoAttachmentsSampleCounts;
+
+    while (count > 1u && !(supported & count))
+      count >>= 1u;
+
+    return count;
   }
   
   

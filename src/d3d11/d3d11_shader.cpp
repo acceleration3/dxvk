@@ -4,6 +4,7 @@
 #include <dxbc/dxbc_container.h>
 #include <dxbc/dxbc_interface.h>
 #include <dxbc/dxbc_parser.h>
+#include <dxbc/dxbc_signature.h>
 
 #include "d3d11_device.h"
 #include "d3d11_shader.h"
@@ -227,6 +228,8 @@ namespace dxvk {
     if (pLinkage)
       GatherInterefaceInfo(pLinkage, pShaderBytecode, BytecodeLength);
 
+    GatherInputInfo(pShaderBytecode, BytecodeLength);
+
     CreateIrShader(pDevice, ShaderKey, ModuleInfo, pShaderBytecode, BytecodeLength, Icb);
     pDevice->GetDXVKDevice()->registerShader(m_shader);
   }
@@ -262,16 +265,39 @@ namespace dxvk {
       pDevice->InitShaderIcb(this, icbSizeInBytes, Icb.data);
     }
 
-    // Create actual shader converter
+    // Create actual shader converter. It is kept even when the shader
+    // comes from the cache: shader variants are converted from it.
+    m_converter = new D3D11ShaderConverter(ShaderKey,
+      ModuleInfo, pShaderBytecode, BytecodeLength, bool(m_buffer));
+
     m_shader = pDevice->GetDXVKDevice()->createCachedShader(
       ShaderKey.toString(), ModuleInfo, nullptr);
 
     if (!m_shader) {
-      Rc<D3D11ShaderConverter> converter = new D3D11ShaderConverter(ShaderKey,
-        ModuleInfo, pShaderBytecode, BytecodeLength, bool(m_buffer));
-
       m_shader = pDevice->GetDXVKDevice()->createCachedShader(
-        ShaderKey.toString(), ModuleInfo, std::move(converter));
+        ShaderKey.toString(), ModuleInfo, m_converter);
+    }
+  }
+
+
+  void D3D11CommonShader::GatherInputInfo(
+    const void*                   pShaderBytecode,
+          size_t                  BytecodeLength) {
+    dxbc_spv::dxbc::Container container(pShaderBytecode, BytecodeLength);
+    dxbc_spv::util::ByteReader chunk(container.getInputSignatureChunk());
+
+    if (!chunk)
+      return;
+
+    dxbc_spv::dxbc::Signature signature(chunk);
+
+    for (const auto& e : signature) {
+      if (e.getRegisterIndex() >= 0)
+        m_inputRegisterCount = std::max(m_inputRegisterCount, uint32_t(e.getRegisterIndex()) + 1u);
+
+      if (e.getSystemValue() == dxbc_spv::dxbc::SignatureSysval::eClipDistance
+       || e.getSystemValue() == dxbc_spv::dxbc::SignatureSysval::eCullDistance)
+        m_readsClipDistances = true;
     }
   }
 
