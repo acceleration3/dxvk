@@ -71,7 +71,7 @@ namespace dxvk {
      * removed from the look-up table.
      * \param [in] object Pointer to object to destroy
      */
-    void Destroy(T* object, uint32_t version) {
+    void Destroy(T* object, uint64_t version) {
       std::unique_ptr<T> allocation;
 
       // This code can re-enter via destruction notifier callbacks,

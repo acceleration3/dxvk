@@ -108,10 +108,10 @@ namespace dxvk {
   class D3D11StateObject : public D3D11DeviceObject<Base> {
     using Container = D3D11StateObjectSet<Self>;
 
-    constexpr static uint32_t AddRefValue = 1u;
-    constexpr static uint32_t ReleaseShift = 16u;
-    constexpr static uint32_t ReleaseValue = 1u << ReleaseShift;
-    constexpr static uint32_t RefMask = ReleaseValue - 1u;
+    constexpr static uint64_t AddRefValue = 1u;
+    constexpr static uint64_t ReleaseShift = 32u;
+    constexpr static uint64_t ReleaseValue = uint64_t(1u) << ReleaseShift;
+    constexpr static uint64_t RefMask = ReleaseValue - 1u;
   public:
 
     D3D11StateObject(D3D11Device* pDevice, Container* pContainer)
@@ -154,8 +154,8 @@ namespace dxvk {
       // - Thread 1: Gets unblocked
       // - Thread 1: StateObjectSet::Destroy returns
       // In this scenario, only one thread can safely destroy the object.
-      uint32_t expected = m_refPrivate.load();
-      uint32_t desired;
+      uint64_t expected = m_refPrivate.load();
+      uint64_t desired;
 
       do {
         desired = ((expected + 1u) & RefMask) | (expected & ~RefMask);
@@ -163,23 +163,23 @@ namespace dxvk {
     }
 
     void ReleasePrivate() {
-      uint32_t refCount = m_refPrivate.fetch_add(ReleaseValue) + ReleaseValue;
+      uint64_t refCount = m_refPrivate.fetch_add(ReleaseValue) + ReleaseValue;
 
-      uint32_t addRefCount = (refCount & RefMask) / AddRefValue;
-      uint32_t releaseCount = (refCount & ~RefMask) / ReleaseValue;
+      uint64_t addRefCount = (refCount & RefMask) / AddRefValue;
+      uint64_t releaseCount = (refCount & ~RefMask) / ReleaseValue;
 
       if (unlikely(addRefCount == releaseCount))
         m_container->Destroy(static_cast<Self*>(this), refCount);
     }
 
-    BOOL IsCurrent(uint32_t version) {
+    BOOL IsCurrent(uint64_t version) {
       return m_refPrivate.load() == version;
     }
 
   private:
 
     std::atomic<uint32_t> m_refCount = { 0u };
-    std::atomic<uint32_t> m_refPrivate = { 0u };
+    std::atomic<uint64_t> m_refPrivate = { 0u };
     Container*            m_container = nullptr;
     
   };
